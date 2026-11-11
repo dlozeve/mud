@@ -32,7 +32,7 @@ pub type Action {
   Tell(player: PlayerId, room_event: event.RoomEvent)
 }
 
-pub fn run(action: Action, state: State) -> Nil {
+fn run(action: Action, state: State) -> Nil {
   case action {
     Tell(player, room_event) -> {
       case dict.get(state.occupants, player) {
@@ -46,22 +46,37 @@ pub fn run(action: Action, state: State) -> Nil {
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
     PlayerEntered(player, listener) -> {
-      let occupants = dict.insert(state.occupants, player, listener)
-      let tells =
-        list.append(broadcast(occupants, event.PlayerEntered(player)), [
-          Tell(player, event.RoomDescribed(state.description)),
-        ])
-      #(State(..state, occupants:), tells)
+      case dict.get(state.occupants, player) {
+        Ok(_) -> #(state, [])
+        Error(_) -> {
+          let occupants = dict.insert(state.occupants, player, listener)
+          let tells =
+            list.append(broadcast(occupants, event.PlayerEntered(player)), [
+              Tell(player, event.RoomDescribed(state.description)),
+            ])
+          #(State(..state, occupants:), tells)
+        }
+      }
     }
     PlayerLeft(player) -> {
-      let occupants = dict.delete(state.occupants, player)
-      let tells = broadcast(occupants, event.PlayerLeft(player))
-      #(State(..state, occupants:), tells)
+      case dict.get(state.occupants, player) {
+        Ok(_) -> {
+          let occupants = dict.delete(state.occupants, player)
+          let tells = broadcast(occupants, event.PlayerLeft(player))
+          #(State(..state, occupants:), tells)
+        }
+        Error(_) -> #(state, [])
+      }
     }
     Say(speaker, text) -> {
-      let tells =
-        broadcast(state.occupants, event.PlayerSaid(player: speaker, text:))
-      #(state, tells)
+      case dict.get(state.occupants, speaker) {
+        Ok(_) -> {
+          let tells =
+            broadcast(state.occupants, event.PlayerSaid(player: speaker, text:))
+          #(state, tells)
+        }
+        Error(_) -> #(state, [])
+      }
     }
   }
 }

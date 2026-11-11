@@ -1,5 +1,6 @@
 import gleam/dict
 import gleam/list
+import gleam/set
 import mud/event
 import mud/room
 import mud/types.{type PlayerId}
@@ -18,11 +19,11 @@ fn state_with(players: List(PlayerId)) -> room.State {
 pub fn say_broadcast_test() {
   let state = state_with(["Alice", "Bob"])
   let #(_state, actions) = room.decide(state, room.Say("Alice", "hi"))
-  assert actions
-    == [
+  assert set.from_list(actions)
+    == set.from_list([
       room.Tell("Alice", event.PlayerSaid("Alice", "hi")),
       room.Tell("Bob", event.PlayerSaid("Alice", "hi")),
-    ]
+    ])
 }
 
 pub fn enter_broadcast_test() {
@@ -30,24 +31,28 @@ pub fn enter_broadcast_test() {
   let #(_state, actions) =
     room.decide(
       state,
-      room.PlayerEntered("Alice", event.Listener(fn(_) { Nil })),
+      room.PlayerEntered("Carol", event.Listener(fn(_) { Nil })),
     )
-  assert actions
+  assert set.from_list(list.take(actions, 3))
+    == set.from_list([
+      room.Tell("Alice", event.PlayerEntered("Carol")),
+      room.Tell("Bob", event.PlayerEntered("Carol")),
+      room.Tell("Carol", event.PlayerEntered("Carol")),
+    ])
+  assert list.drop(actions, 3)
     == [
-      room.Tell("Alice", event.PlayerEntered("Alice")),
-      room.Tell("Bob", event.PlayerEntered("Alice")),
-      room.Tell("Alice", event.RoomDescribed(state.description)),
+      room.Tell("Carol", event.RoomDescribed(state.description)),
     ]
 }
 
 pub fn leave_broadcast_test() {
   let state = state_with(["Alice", "Bob", "Carol"])
   let #(_state, actions) = room.decide(state, room.PlayerLeft("Alice"))
-  assert actions
-    == [
+  assert set.from_list(actions)
+    == set.from_list([
       room.Tell("Bob", event.PlayerLeft("Alice")),
       room.Tell("Carol", event.PlayerLeft("Alice")),
-    ]
+    ])
 }
 
 pub fn say_non_occupant_test() {
@@ -60,4 +65,12 @@ pub fn leave_non_occupant_test() {
   let state = state_with(["Alice", "Bob"])
   let #(_state, actions) = room.decide(state, room.PlayerLeft("Carol"))
   assert actions == []
+}
+
+pub fn enter_twice_test() {
+  let state = state_with(["Alice", "Bob"])
+  let #(new_state, actions) =
+    room.decide(state, room.PlayerEntered("Bob", event.Listener(fn(_) { Nil })))
+  assert actions == []
+  assert dict.keys(state.occupants) == dict.keys(new_state.occupants)
 }
