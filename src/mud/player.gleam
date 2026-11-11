@@ -9,7 +9,7 @@ pub type Message {
 }
 
 pub type State {
-  State(id: PlayerId)
+  State(id: PlayerId, name: String)
 }
 
 pub fn handle_message(
@@ -18,23 +18,26 @@ pub fn handle_message(
 ) -> actor.Next(State, Message) {
   case message {
     Event(room_event) ->
-      io.println("[" <> state.id <> "] " <> render(room_event, state.id))
+      io.println("[" <> state.name <> "] " <> render(room_event))
   }
   actor.continue(state)
 }
 
-pub fn render(room_event: event.RoomEvent, viewer: PlayerId) -> String {
+pub fn render(room_event: event.RoomEvent) -> String {
   case room_event {
-    event.PlayerSaid(player, text) if viewer == player -> "You say: " <> text
-    event.PlayerSaid(player, text) -> player <> " says: " <> text
-    event.PlayerEntered(player) if viewer == player -> "You enter the room."
-    event.PlayerEntered(player) -> player <> " enters the room."
-    event.PlayerLeft(player) if viewer == player -> "You leave the room."
-    event.PlayerLeft(player) -> player <> " leaves the room."
-    event.RoomDescribed(text) -> text
+    event.YouArrived(room_name, room_description) ->
+      "You enter " <> room_name <> ".\n" <> room_description
+    event.PlayerArrived(player_name) -> player_name <> " arrives."
+    event.PlayerLeft(player_name) -> player_name <> " leaves."
+    event.YouSaid(text) -> "You say: " <> text
+    event.PlayerSaid(player_name, text) -> player_name <> " says: " <> text
   }
 }
 
-pub fn to_listener(player: Subject(Message)) -> event.Listener {
+fn to_listener(player: Subject(Message)) -> event.Listener {
   event.Listener(fn(room_event) { process.send(player, Event(room_event)) })
+}
+
+pub fn to_session(player: Subject(Message), state: State) -> event.Session {
+  event.Session(state.id, state.name, to_listener(player))
 }

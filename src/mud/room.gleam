@@ -6,16 +6,17 @@ import mud/event
 import mud/types.{type PlayerId, type RoomId}
 
 pub type Message {
-  PlayerEntered(player: PlayerId, listener: event.Listener)
-  PlayerLeft(player: PlayerId)
+  Enter(session: event.Session)
+  Leave(player: PlayerId)
   Say(speaker: PlayerId, text: String)
 }
 
 pub type State {
   State(
     id: RoomId,
+    name: String,
     description: String,
-    occupants: Dict(PlayerId, event.Listener),
+    occupants: Dict(PlayerId, event.Session),
   )
 }
 
@@ -36,7 +37,7 @@ fn run(action: Action, state: State) -> Nil {
   case action {
     Tell(player, room_event) -> {
       case dict.get(state.occupants, player) {
-        Ok(listener) -> listener.tell(room_event)
+        Ok(session) -> session.listener.tell(room_event)
         Error(_) -> Nil
       }
     }
@@ -45,24 +46,34 @@ fn run(action: Action, state: State) -> Nil {
 
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
-    PlayerEntered(player, listener) -> {
-      case dict.get(state.occupants, player) {
+    Enter(session) -> {
+      case dict.get(state.occupants, session.id) {
         Ok(_) -> #(state, [])
         Error(_) -> {
-          let occupants = dict.insert(state.occupants, player, listener)
-          let tells =
-            list.append(broadcast(occupants, event.PlayerEntered(player)), [
-              Tell(player, event.RoomDescribed(state.description)),
-            ])
+          let occupants = dict.insert(state.occupants, session.id, session)
+          let tells = [
+            Tell(
+              session.id,
+              event.YouArrived(
+                room_name: state.name,
+                room_description: state.description,
+              ),
+            ),
+            ..tell_others(
+              occupants,
+              session.id,
+              event.PlayerArrived(session.name),
+            )
+          ]
           #(State(..state, occupants:), tells)
         }
       }
     }
-    PlayerLeft(player) -> {
+    Leave(player) -> {
       case dict.get(state.occupants, player) {
-        Ok(_) -> {
+        Ok(session) -> {
           let occupants = dict.delete(state.occupants, player)
-          let tells = broadcast(occupants, event.PlayerLeft(player))
+          let tells = broadcast(occupants, event.PlayerLeft(session.name))
           #(State(..state, occupants:), tells)
         }
         Error(_) -> #(state, [])
@@ -70,9 +81,15 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
     }
     Say(speaker, text) -> {
       case dict.get(state.occupants, speaker) {
-        Ok(_) -> {
-          let tells =
-            broadcast(state.occupants, event.PlayerSaid(player: speaker, text:))
+        Ok(session) -> {
+          let tells = [
+            Tell(session.id, event.YouSaid(text:)),
+            ..tell_others(
+              state.occupants,
+              session.id,
+              event.PlayerSaid(player_name: session.name, text:),
+            )
+          ]
           #(state, tells)
         }
         Error(_) -> #(state, [])
@@ -82,7 +99,7 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
 }
 
 fn broadcast(
-  occupants: Dict(PlayerId, event.Listener),
+  occupants: Dict(PlayerId, event.Session),
   room_event: event.RoomEvent,
 ) -> List(Action) {
   occupants
@@ -90,16 +107,23 @@ fn broadcast(
   |> list.map(Tell(_, room_event))
 }
 
-pub fn enter(
-  room: Subject(Message),
-  player: PlayerId,
-  listener: event.Listener,
-) -> Nil {
-  actor.send(room, PlayerEntered(player:, listener:))
+fn tell_others(
+  occupants: Dict(PlayerId, event.Session),
+  except: PlayerId,
+  room_event: event.RoomEvent,
+) -> List(Action) {
+  occupants
+  |> dict.delete(except)
+  |> dict.keys
+  |> list.map(Tell(_, room_event))
+}
+
+pub fn enter(room: Subject(Message), session: event.Session) -> Nil {
+  actor.send(room, Enter(session))
 }
 
 pub fn leave(room: Subject(Message), player: PlayerId) -> Nil {
-  actor.send(room, PlayerLeft(player:))
+  actor.send(room, Leave(player:))
 }
 
 pub fn say(room: Subject(Message), speaker: PlayerId, text: String) -> Nil {

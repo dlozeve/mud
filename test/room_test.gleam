@@ -3,74 +3,89 @@ import gleam/list
 import gleam/set
 import mud/event
 import mud/room
-import mud/types.{type PlayerId}
+import mud/types
 
-fn state_with(players: List(PlayerId)) -> room.State {
-  let noop_listener = event.Listener(fn(_) { Nil })
+fn session_with(name: String) -> event.Session {
+  event.Session(
+    types.new_player_id(name <> "_id"),
+    name,
+    event.Listener(fn(_) { Nil }),
+  )
+}
+
+fn state_with(sessions: List(event.Session)) -> room.State {
   room.State(
-    id: "r1",
+    id: types.new_room_id("r1"),
+    name: "room",
     description: "dark",
     occupants: dict.from_list(
-      list.map(players, fn(player) { #(player, noop_listener) }),
+      list.map(sessions, fn(session) { #(session.id, session) }),
     ),
   )
 }
 
 pub fn say_broadcast_test() {
-  let state = state_with(["Alice", "Bob"])
-  let #(_state, actions) = room.decide(state, room.Say("Alice", "hi"))
+  let alice = session_with("Alice")
+  let bob = session_with("Bob")
+  let state = state_with([alice, bob])
+  let #(_state, actions) = room.decide(state, room.Say(alice.id, "hi"))
   assert set.from_list(actions)
     == set.from_list([
-      room.Tell("Alice", event.PlayerSaid("Alice", "hi")),
-      room.Tell("Bob", event.PlayerSaid("Alice", "hi")),
+      room.Tell(alice.id, event.YouSaid("hi")),
+      room.Tell(bob.id, event.PlayerSaid(alice.name, "hi")),
     ])
 }
 
 pub fn enter_broadcast_test() {
-  let state = state_with(["Alice", "Bob"])
-  let #(_state, actions) =
-    room.decide(
-      state,
-      room.PlayerEntered("Carol", event.Listener(fn(_) { Nil })),
-    )
-  assert set.from_list(list.take(actions, 3))
+  let alice = session_with("Alice")
+  let bob = session_with("Bob")
+  let carol = session_with("Carol")
+  let state = state_with([alice, bob])
+  let #(_state, actions) = room.decide(state, room.Enter(carol))
+  assert set.from_list(actions)
     == set.from_list([
-      room.Tell("Alice", event.PlayerEntered("Carol")),
-      room.Tell("Bob", event.PlayerEntered("Carol")),
-      room.Tell("Carol", event.PlayerEntered("Carol")),
+      room.Tell(alice.id, event.PlayerArrived(carol.name)),
+      room.Tell(bob.id, event.PlayerArrived(carol.name)),
+      room.Tell(carol.id, event.YouArrived(state.name, state.description)),
     ])
-  assert list.drop(actions, 3)
-    == [
-      room.Tell("Carol", event.RoomDescribed(state.description)),
-    ]
 }
 
 pub fn leave_broadcast_test() {
-  let state = state_with(["Alice", "Bob", "Carol"])
-  let #(_state, actions) = room.decide(state, room.PlayerLeft("Alice"))
+  let alice = session_with("Alice")
+  let bob = session_with("Bob")
+  let carol = session_with("Carol")
+  let state = state_with([alice, bob, carol])
+  let #(_state, actions) = room.decide(state, room.Leave(alice.id))
   assert set.from_list(actions)
     == set.from_list([
-      room.Tell("Bob", event.PlayerLeft("Alice")),
-      room.Tell("Carol", event.PlayerLeft("Alice")),
+      room.Tell(bob.id, event.PlayerLeft(alice.name)),
+      room.Tell(carol.id, event.PlayerLeft(alice.name)),
     ])
 }
 
 pub fn say_non_occupant_test() {
-  let state = state_with(["Alice", "Bob"])
-  let #(_state, actions) = room.decide(state, room.Say("Carol", "hi"))
+  let alice = session_with("Alice")
+  let bob = session_with("Bob")
+  let carol = session_with("Carol")
+  let state = state_with([alice, bob])
+  let #(_state, actions) = room.decide(state, room.Say(carol.id, "hi"))
   assert actions == []
 }
 
 pub fn leave_non_occupant_test() {
-  let state = state_with(["Alice", "Bob"])
-  let #(_state, actions) = room.decide(state, room.PlayerLeft("Carol"))
+  let alice = session_with("Alice")
+  let bob = session_with("Bob")
+  let carol = session_with("Carol")
+  let state = state_with([alice, bob])
+  let #(_state, actions) = room.decide(state, room.Leave(carol.id))
   assert actions == []
 }
 
 pub fn enter_twice_test() {
-  let state = state_with(["Alice", "Bob"])
-  let #(new_state, actions) =
-    room.decide(state, room.PlayerEntered("Bob", event.Listener(fn(_) { Nil })))
+  let alice = session_with("Alice")
+  let bob = session_with("Bob")
+  let state = state_with([alice, bob])
+  let #(new_state, actions) = room.decide(state, room.Enter(bob))
   assert actions == []
   assert dict.keys(state.occupants) == dict.keys(new_state.occupants)
 }
