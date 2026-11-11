@@ -1,5 +1,6 @@
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
+import gleam/list
 import gleam/otp/actor
 import mud/event
 import mud/types.{type PlayerId, type RoomId}
@@ -22,21 +23,45 @@ pub fn handle_message(
   state: State,
   message: Message,
 ) -> actor.Next(State, Message) {
+  let #(state, actions) = decide(state, message)
+  list.each(actions, run(_, state))
+  actor.continue(state)
+}
+
+pub type Action {
+  Tell(player: PlayerId, room_event: event.RoomEvent)
+}
+
+pub fn run(action: Action, state: State) -> Nil {
+  case action {
+    Tell(player, room_event) -> {
+      case dict.get(state.occupants, player) {
+        Ok(listener) -> listener.tell(room_event)
+        Error(_) -> Nil
+      }
+    }
+  }
+}
+
+pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
     PlayerEntered(player, listener) -> {
-      let new_occupants = dict.insert(state.occupants, player, listener)
-      broadcast(new_occupants, event.PlayerEntered(player))
-      listener.tell(event.RoomDescribed(state.description))
-      actor.continue(State(..state, occupants: new_occupants))
+      let occupants = dict.insert(state.occupants, player, listener)
+      let tells =
+        list.append(broadcast(occupants, event.PlayerEntered(player)), [
+          Tell(player, event.RoomDescribed(state.description)),
+        ])
+      #(State(..state, occupants:), tells)
     }
     PlayerLeft(player) -> {
-      broadcast(state.occupants, event.PlayerLeft(player))
-      let new_occupants = dict.delete(state.occupants, player)
-      actor.continue(State(..state, occupants: new_occupants))
+      let occupants = dict.delete(state.occupants, player)
+      let tells = broadcast(occupants, event.PlayerLeft(player))
+      #(State(..state, occupants:), tells)
     }
     Say(speaker, text) -> {
-      broadcast(state.occupants, event.PlayerSaid(player: speaker, text:))
-      actor.continue(state)
+      let tells =
+        broadcast(state.occupants, event.PlayerSaid(player: speaker, text:))
+      #(state, tells)
     }
   }
 }
@@ -44,8 +69,10 @@ pub fn handle_message(
 fn broadcast(
   occupants: Dict(PlayerId, event.Listener),
   room_event: event.RoomEvent,
-) -> Nil {
-  dict.each(occupants, fn(_id, listener) { listener.tell(room_event) })
+) -> List(Action) {
+  occupants
+  |> dict.keys
+  |> list.map(Tell(_, room_event))
 }
 
 pub fn enter(
