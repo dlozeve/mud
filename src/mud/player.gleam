@@ -17,30 +17,22 @@ pub fn handle_message(
   message: Message,
 ) -> actor.Next(State, Message) {
   case message {
-    Event(event.PlayerSaid(player, text)) -> {
-      io.println(
-        "Player "
-        <> state.id
-        <> " received message from "
-        <> player
-        <> ": \""
-        <> text
-        <> "\"",
-      )
-    }
-    Event(event.PlayerEntered(_player)) -> Nil
-    Event(event.PlayerLeft(_player)) -> Nil
-    Event(event.RoomDescribed(text)) -> {
-      io.println(
-        "Player "
-        <> state.id
-        <> " received the room description: \""
-        <> text
-        <> "\"",
-      )
-    }
+    Event(room_event) ->
+      io.println("[" <> state.id <> "] " <> render(room_event, state.id))
   }
   actor.continue(state)
+}
+
+pub fn render(room_event: event.RoomEvent, viewer: PlayerId) -> String {
+  case room_event {
+    event.PlayerSaid(player, text) if viewer == player -> "You say: " <> text
+    event.PlayerSaid(player, text) -> player <> " says: " <> text
+    event.PlayerEntered(player) if viewer == player -> "You enter the room."
+    event.PlayerEntered(player) -> player <> " enters the room."
+    event.PlayerLeft(player) if viewer == player -> "You leave the room."
+    event.PlayerLeft(player) -> player <> " leaves the room."
+    event.RoomDescribed(text) -> text
+  }
 }
 
 pub fn to_listener(player: Subject(Message)) -> event.Listener {

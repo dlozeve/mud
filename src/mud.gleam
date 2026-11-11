@@ -36,10 +36,10 @@ pub fn main() -> Nil {
   room.enter(room_actor.data, alice, player.to_listener(alice_actor.data))
   room.enter(room_actor.data, bob, player.to_listener(bob_actor.data))
   room.enter(room_actor.data, carol, player.to_listener(carol_actor.data))
-  actor.send(room_actor.data, room.Say(alice, "Hello everyone!"))
-  actor.send(room_actor.data, room.PlayerLeft(alice))
-  actor.send(room_actor.data, room.PlayerLeft(carol))
-  actor.send(room_actor.data, room.PlayerLeft(bob))
+  room.say(room_actor.data, alice, "Hello everyone!")
+  room.leave(room_actor.data, alice)
+  room.leave(room_actor.data, carol)
+  room.leave(room_actor.data, bob)
 
   process.sleep(100)
 }
