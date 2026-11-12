@@ -28,6 +28,8 @@ pub type Member {
 }
 
 pub type State {
+  // Rooms own occupancy. `members` is just an index over all the rooms `occupancy` maps.
+  // Convergence is eventual.
   State(rooms: Dict(RoomId, RoomInfo), members: Dict(PlayerId, Member))
 }
 
