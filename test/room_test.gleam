@@ -16,8 +16,6 @@ fn session_with(name: String) -> event.Session {
 fn state_with(sessions: List(event.Session)) -> room.State {
   room.State(
     id: id.new_room_id("r1"),
-    name: "room",
-    description: "dark",
     occupants: dict.from_list(
       list.map(sessions, fn(session) { #(session.id, session) }),
     ),
@@ -46,7 +44,6 @@ pub fn enter_broadcast_test() {
     == set.from_list([
       room.Tell(alice.id, event.PlayerArrived(carol.name)),
       room.Tell(bob.id, event.PlayerArrived(carol.name)),
-      room.Tell(carol.id, event.YouArrived(state.name, state.description)),
     ])
 }
 

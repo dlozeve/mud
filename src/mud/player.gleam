@@ -2,14 +2,18 @@ import gleam/erlang/process.{type Subject}
 import gleam/io
 import gleam/otp/actor
 import mud/event.{type RoomEvent}
-import mud/id.{type PlayerId}
+import mud/id.{type PlayerId, type RoomId}
+import mud/world
 
 pub type Message {
   Event(RoomEvent)
+  Input(line: String)
+  Move(to: RoomId)
+  Disconnect
 }
 
 pub type State {
-  State(id: PlayerId, name: String)
+  State(id: PlayerId, name: String, world: Subject(world.Message))
 }
 
 pub fn handle_message(
@@ -17,10 +21,23 @@ pub fn handle_message(
   message: Message,
 ) -> actor.Next(State, Message) {
   case message {
-    Event(room_event) ->
+    Event(room_event) -> {
       io.println("[" <> state.name <> "] " <> render(room_event))
+      actor.continue(state)
+    }
+    Input(line) -> {
+      world.say(state.world, state.id, line)
+      actor.continue(state)
+    }
+    Move(room) -> {
+      world.move(state.world, state.id, room)
+      actor.continue(state)
+    }
+    Disconnect -> {
+      world.leave(state.world, state.id)
+      actor.stop()
+    }
   }
-  actor.continue(state)
 }
 
 pub fn render(room_event: event.RoomEvent) -> String {
@@ -40,4 +57,16 @@ fn to_listener(player: Subject(Message)) -> event.Listener {
 
 pub fn to_session(player: Subject(Message), state: State) -> event.Session {
   event.Session(state.id, state.name, to_listener(player))
+}
+
+pub fn move(player: Subject(Message), to: RoomId) -> Nil {
+  actor.send(player, Move(to:))
+}
+
+pub fn input(player: Subject(Message), line: String) -> Nil {
+  actor.send(player, Input(line:))
+}
+
+pub fn disconnect(player: Subject(Message)) -> Nil {
+  actor.send(player, Disconnect)
 }

@@ -12,12 +12,7 @@ pub type Message {
 }
 
 pub type State {
-  State(
-    id: RoomId,
-    name: String,
-    description: String,
-    occupants: Dict(PlayerId, event.Session),
-  )
+  State(id: RoomId, occupants: Dict(PlayerId, event.Session))
 }
 
 pub fn handle_message(
@@ -51,20 +46,12 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
         Ok(_) -> #(state, [])
         Error(_) -> {
           let occupants = dict.insert(state.occupants, session.id, session)
-          let tells = [
-            Tell(
-              session.id,
-              event.YouArrived(
-                room_name: state.name,
-                room_description: state.description,
-              ),
-            ),
-            ..tell_others(
+          let tells =
+            tell_others(
               occupants,
               session.id,
               event.PlayerArrived(session.name),
             )
-          ]
           #(State(..state, occupants:), tells)
         }
       }
