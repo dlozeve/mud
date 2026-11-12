@@ -26,6 +26,7 @@ pub fn main() -> Nil {
           entrance.id,
           world.RoomInfo(
             entrance_actor.data,
+            id: entrance.id,
             name: "the dungeon entrance",
             description: "The bottom of an enormous stone staircase. Dark and ominous. Slow rumble coming from below.",
           ),
@@ -34,6 +35,7 @@ pub fn main() -> Nil {
           room.id,
           world.RoomInfo(
             room_actor.data,
+            id: room.id,
             name: "a dimly-lit corridor",
             description: "Long and narrow, with a few torches on the walls. Damp.",
           ),
