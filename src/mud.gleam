@@ -1,12 +1,12 @@
 import gleam/dict
 import gleam/erlang/process
 import gleam/otp/actor
+import mud/id
 import mud/player
 import mud/room
-import mud/types
 
 pub fn main() -> Nil {
-  let room = types.new_room_id("r1")
+  let room = id.new_room_id("r1")
   let assert Ok(room_actor) =
     actor.new(room.State(
       id: room,
@@ -17,21 +17,21 @@ pub fn main() -> Nil {
     |> actor.on_message(room.handle_message)
     |> actor.start
 
-  let alice = player.State(types.new_player_id("alice"), "Alice")
+  let alice = player.State(id.new_player_id("alice"), "Alice")
   let assert Ok(alice_actor) =
     actor.new(alice)
     |> actor.on_message(player.handle_message)
     |> actor.start
   let alice_session = player.to_session(alice_actor.data, alice)
 
-  let bob = player.State(types.new_player_id("bob"), "Bob")
+  let bob = player.State(id.new_player_id("bob"), "Bob")
   let assert Ok(bob_actor) =
     actor.new(bob)
     |> actor.on_message(player.handle_message)
     |> actor.start
   let bob_session = player.to_session(bob_actor.data, bob)
 
-  let carol = player.State(types.new_player_id("carol"), "Carol")
+  let carol = player.State(id.new_player_id("carol"), "Carol")
   let assert Ok(carol_actor) =
     actor.new(carol)
     |> actor.on_message(player.handle_message)

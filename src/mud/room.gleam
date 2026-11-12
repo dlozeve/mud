@@ -3,7 +3,7 @@ import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/otp/actor
 import mud/event
-import mud/types.{type PlayerId, type RoomId}
+import mud/id.{type PlayerId, type RoomId}
 
 pub type Message {
   Enter(session: event.Session)

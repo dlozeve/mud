@@ -2,7 +2,7 @@ import gleam/erlang/process.{type Subject}
 import gleam/io
 import gleam/otp/actor
 import mud/event.{type RoomEvent}
-import mud/types.{type PlayerId}
+import mud/id.{type PlayerId}
 
 pub type Message {
   Event(RoomEvent)

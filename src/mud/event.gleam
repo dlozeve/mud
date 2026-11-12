@@ -1,4 +1,4 @@
-import mud/types.{type PlayerId}
+import mud/id.{type PlayerId}
 
 pub type RoomEvent {
   YouArrived(room_name: String, room_description: String)

@@ -2,12 +2,12 @@ import gleam/dict
 import gleam/list
 import gleam/set
 import mud/event
+import mud/id
 import mud/room
-import mud/types
 
 fn session_with(name: String) -> event.Session {
   event.Session(
-    types.new_player_id(name <> "_id"),
+    id.new_player_id(name <> "_id"),
     name,
     event.Listener(fn(_) { Nil }),
   )
@@ -15,7 +15,7 @@ fn session_with(name: String) -> event.Session {
 
 fn state_with(sessions: List(event.Session)) -> room.State {
   room.State(
-    id: types.new_room_id("r1"),
+    id: id.new_room_id("r1"),
     name: "room",
     description: "dark",
     occupants: dict.from_list(
