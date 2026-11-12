@@ -39,7 +39,7 @@ pub fn join_emits_arrive_then_enter_test() {
 
   assert actions
     == [
-      world.TellYouArrived(alice, entrance.name, entrance.description),
+      world.DescribeRoom(alice, entrance.name, entrance.description),
       world.EnterRoom(alice, entrance.subject),
     ]
   assert dict.get(new_state.members, alice.id) == Ok(world.Member(alice, r1))
@@ -84,7 +84,7 @@ pub fn move_emits_leave_then_arrive_then_enter_test() {
   assert actions
     == [
       world.LeaveRoom(alice.id, entrance.subject),
-      world.TellYouArrived(alice, corridor.name, corridor.description),
+      world.DescribeRoom(alice, corridor.name, corridor.description),
       world.EnterRoom(alice, corridor.subject),
     ]
   assert dict.get(new_state.members, alice.id) == Ok(world.Member(alice, r2))
@@ -131,7 +131,7 @@ pub fn move_from_an_unknown_room_emits_only_entrance_test() {
 
   assert actions
     == [
-      world.TellYouArrived(alice, corridor.name, corridor.description),
+      world.DescribeRoom(alice, corridor.name, corridor.description),
       world.EnterRoom(alice, corridor.subject),
     ]
   assert dict.get(new_state.members, alice.id) == Ok(world.Member(alice, r2))
@@ -205,6 +205,51 @@ pub fn player_says_from_unknown_member_emits_nothing_test() {
   let state = state_with([entrance, corridor], [])
 
   let #(_, actions) = world.decide(state, world.PlayerSays(alice.id, "hi"))
+
+  assert actions == []
+}
+
+pub fn look_emits_reply_with_description_test() {
+  let alice = session_with("alice")
+  let r1 = id.new_room_id("r1")
+  let r2 = id.new_room_id("r2")
+
+  let entrance = room_with(r1, "entrance")
+  let corridor = room_with(r2, "corridor")
+  let state = state_with([entrance, corridor], [#(alice, r1)])
+
+  let #(_, actions) = world.decide(state, world.Look(alice.id))
+
+  assert actions
+    == [
+      world.DescribeRoom(alice, entrance.name, entrance.description),
+    ]
+}
+
+pub fn look_in_wrong_room_emits_empty_reply_test() {
+  let alice = session_with("alice")
+  let r1 = id.new_room_id("r1")
+  let r2 = id.new_room_id("r2")
+
+  let entrance = room_with(r1, "entrance")
+  let state = state_with([entrance], [#(alice, r2)])
+
+  let #(_, actions) = world.decide(state, world.Look(alice.id))
+
+  assert actions
+    == [world.DescribeRoom(alice, "a nonexisting room", "An empty void.")]
+}
+
+pub fn look_non_existing_player_emits_empty_reply_test() {
+  let alice = session_with("alice")
+  let r1 = id.new_room_id("r1")
+  let r2 = id.new_room_id("r2")
+
+  let entrance = room_with(r1, "entrance")
+  let corridor = room_with(r2, "corridor")
+  let state = state_with([entrance, corridor], [])
+
+  let #(_, actions) = world.decide(state, world.Look(alice.id))
 
   assert actions == []
 }

@@ -11,6 +11,7 @@ pub type Message {
   Move(player: PlayerId, to: RoomId)
   Leave(player: PlayerId)
   PlayerSays(player: PlayerId, text: String)
+  Look(player: PlayerId)
 }
 
 pub type RoomInfo {
@@ -40,7 +41,7 @@ pub fn handle_message(
 }
 
 pub type Action {
-  TellYouArrived(
+  DescribeRoom(
     session: event.Session,
     room_name: String,
     room_description: String,
@@ -52,8 +53,8 @@ pub type Action {
 
 fn run(action: Action) -> Nil {
   case action {
-    TellYouArrived(session, room_name, room_description) ->
-      session.listener.tell(event.YouArrived(room_name:, room_description:))
+    DescribeRoom(session, room_name, room_description) ->
+      session.listener.tell(event.YouAreIn(room_name:, room_description:))
     EnterRoom(session, room_subject) -> room.enter(room_subject, session)
     LeaveRoom(player, room_subject) -> room.leave(room_subject, player)
     Say(player_id, room_subject, text) ->
@@ -68,7 +69,7 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
         Ok(_), _ -> #(state, [])
         Error(_), Ok(room) -> {
           let actions = [
-            TellYouArrived(session, room.name, room.description),
+            DescribeRoom(session, room.name, room.description),
             EnterRoom(session, room.subject),
           ]
           let new_state =
@@ -90,12 +91,12 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
           let actions = case dict.get(state.rooms, member.at) {
             Ok(from_room) -> [
               LeaveRoom(player, from_room.subject),
-              TellYouArrived(member.session, to_room.name, to_room.description),
+              DescribeRoom(member.session, to_room.name, to_room.description),
               EnterRoom(member.session, to_room.subject),
             ]
             // If we can't find the origin, we don't leave, we just enter the new room
             Error(_) -> [
-              TellYouArrived(member.session, to_room.name, to_room.description),
+              DescribeRoom(member.session, to_room.name, to_room.description),
               EnterRoom(member.session, to_room.subject),
             ]
           }
@@ -134,6 +135,27 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
           }
         Error(_) -> #(state, [])
       }
+    Look(player) ->
+      case dict.get(state.members, player) {
+        Ok(member) ->
+          case dict.get(state.rooms, member.at) {
+            Ok(room) -> #(state, [
+              DescribeRoom(
+                session: member.session,
+                room_name: room.name,
+                room_description: room.description,
+              ),
+            ])
+            Error(_) -> #(state, [
+              DescribeRoom(
+                session: member.session,
+                room_name: "a nonexisting room",
+                room_description: "An empty void.",
+              ),
+            ])
+          }
+        Error(_) -> #(state, [])
+      }
   }
 }
 
@@ -155,4 +177,8 @@ pub fn say(world: Subject(Message), player: PlayerId, text: String) -> Nil {
 
 pub fn leave(world: Subject(Message), player: PlayerId) -> Nil {
   actor.send(world, Leave(player:))
+}
+
+pub fn look(world: Subject(Message), player: PlayerId) -> Nil {
+  actor.send(world, Look(player))
 }

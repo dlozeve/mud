@@ -75,7 +75,7 @@ pub fn main() -> Nil {
   player.move(bob_actor.data, room.id)
   player.move(carol_actor.data, room.id)
 
-  process.sleep(50)
+  player.look(bob_actor.data)
 
   player.input(alice_actor.data, "Hello everyone!")
 

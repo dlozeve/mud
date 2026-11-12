@@ -9,6 +9,7 @@ pub type Message {
   Event(RoomEvent)
   Input(line: String)
   Move(to: RoomId)
+  Look
   Disconnect
 }
 
@@ -33,6 +34,10 @@ pub fn handle_message(
       world.move(state.world, state.id, room)
       actor.continue(state)
     }
+    Look -> {
+      world.look(state.world, state.id)
+      actor.continue(state)
+    }
     Disconnect -> {
       world.leave(state.world, state.id)
       actor.stop()
@@ -42,8 +47,8 @@ pub fn handle_message(
 
 pub fn render(room_event: event.RoomEvent) -> String {
   case room_event {
-    event.YouArrived(room_name, room_description) ->
-      "You enter " <> room_name <> ".\n" <> room_description
+    event.YouAreIn(room_name, room_description) ->
+      "You are in " <> room_name <> ".\n" <> room_description
     event.PlayerArrived(player_name) -> player_name <> " arrives."
     event.PlayerLeft(player_name) -> player_name <> " leaves."
     event.YouSaid(text) -> "You say: " <> text
@@ -69,4 +74,8 @@ pub fn input(player: Subject(Message), line: String) -> Nil {
 
 pub fn disconnect(player: Subject(Message)) -> Nil {
   actor.send(player, Disconnect)
+}
+
+pub fn look(player: Subject(Message)) -> Nil {
+  actor.send(player, Look)
 }

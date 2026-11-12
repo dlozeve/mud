@@ -2,8 +2,8 @@ import mud/event
 import mud/player
 
 pub fn render_arrive_to_self_test() {
-  assert player.render(event.YouArrived("the dungeon", "It is dark."))
-    == "You enter the dungeon.\nIt is dark."
+  assert player.render(event.YouAreIn("the dungeon", "It is dark."))
+    == "You are in the dungeon.\nIt is dark."
 }
 
 pub fn render_arrive_to_other_test() {

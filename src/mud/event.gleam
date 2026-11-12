@@ -1,7 +1,7 @@
 import mud/id.{type PlayerId}
 
 pub type RoomEvent {
-  YouArrived(room_name: String, room_description: String)
+  YouAreIn(room_name: String, room_description: String)
   PlayerArrived(player_name: String)
   PlayerLeft(player_name: String)
   YouSaid(text: String)
