@@ -1,58 +1,84 @@
 import gleam/erlang/process.{type Subject}
-import gleam/io
+import gleam/int
+import gleam/list
 import gleam/otp/actor
+import gleam/string
+import mud/command.{type Command}
+import mud/direction.{type Direction}
 import mud/event.{type RoomEvent}
-import mud/id.{type PlayerId, type RoomId}
+import mud/id.{type PlayerId}
 import mud/world
 
 pub type Message {
   Event(RoomEvent)
-  Input(line: String)
-  Move(to: RoomId)
-  Look
-  Disconnect
+  Input(Command)
 }
 
 pub type State {
   State(id: PlayerId, name: String, world: Subject(world.Message))
 }
 
-pub fn handle_message(
+pub type Action {
+  Output(String)
+  Say(String)
+  Move(Direction)
+  Look
+  Leave
+  Unknown(String)
+}
+
+pub fn decide_command(
   state: State,
-  message: Message,
-) -> actor.Next(State, Message) {
+  command: Command,
+) -> #(State, List(Action)) {
+  case command {
+    command.Say(line) -> #(state, [Say(line)])
+    command.Go(dir) -> #(state, [Move(dir)])
+    command.Look -> #(state, [Look])
+    command.Quit -> #(state, [Leave])
+    command.Unknown(line) -> #(state, [Unknown(line)])
+  }
+}
+
+pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
-    Event(room_event) -> {
-      io.println("[" <> state.name <> "] " <> render(room_event))
-      actor.continue(state)
-    }
-    Input(line) -> {
-      world.say(state.world, state.id, line)
-      actor.continue(state)
-    }
-    Move(room) -> {
-      world.move(state.world, state.id, room)
-      actor.continue(state)
-    }
-    Look -> {
-      world.look(state.world, state.id)
-      actor.continue(state)
-    }
-    Disconnect -> {
-      world.leave(state.world, state.id)
-      actor.stop()
-    }
+    Event(room_event) -> #(state, [Output(render(room_event))])
+    Input(command) -> decide_command(state, command)
   }
 }
 
 pub fn render(room_event: event.RoomEvent) -> String {
   case room_event {
-    event.YouAreIn(room_name, room_description) ->
-      "You are in " <> room_name <> ".\n" <> room_description
+    event.YouAreIn(room_name, room_description, exits) ->
+      "You are in "
+      <> room_name
+      <> ".\n"
+      <> room_description
+      <> "\n"
+      <> describe_exits(exits)
     event.PlayerArrived(player_name) -> player_name <> " arrives."
     event.PlayerLeft(player_name) -> player_name <> " leaves."
     event.YouSaid(text) -> "You say: " <> text
     event.PlayerSaid(player_name, text) -> player_name <> " says: " <> text
+  }
+}
+
+fn describe_exits(exits: List(Direction)) -> String {
+  case list.map(exits, direction.render) {
+    [] -> "There is no exit."
+    [a] -> "There is a single door, " <> a <> "."
+    [a, b] -> "There are two doors: " <> a <> " and " <> b <> "."
+    words -> {
+      let n = list.length(words)
+      let #(front, tail) = list.split(words, n - 1)
+      "There are "
+      <> int.to_string(n)
+      <> " doors: "
+      <> string.join(front, ", ")
+      <> " and "
+      <> string.concat(tail)
+      <> "."
+    }
   }
 }
 
@@ -64,18 +90,6 @@ pub fn to_session(player: Subject(Message), state: State) -> event.Session {
   event.Session(state.id, state.name, to_listener(player))
 }
 
-pub fn move(player: Subject(Message), to: RoomId) -> Nil {
-  actor.send(player, Move(to:))
-}
-
-pub fn input(player: Subject(Message), line: String) -> Nil {
-  actor.send(player, Input(line:))
-}
-
-pub fn disconnect(player: Subject(Message)) -> Nil {
-  actor.send(player, Disconnect)
-}
-
-pub fn look(player: Subject(Message)) -> Nil {
-  actor.send(player, Look)
+pub fn input(player: Subject(Message), command: Command) -> Nil {
+  actor.send(player, Input(command))
 }

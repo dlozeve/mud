@@ -1,7 +1,8 @@
+import mud/direction.{type Direction}
 import mud/id.{type PlayerId}
 
 pub type RoomEvent {
-  YouAreIn(room_name: String, room_description: String)
+  YouAreIn(room_name: String, room_description: String, exits: List(Direction))
   PlayerArrived(player_name: String)
   PlayerLeft(player_name: String)
   YouSaid(text: String)
