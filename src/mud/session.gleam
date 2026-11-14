@@ -8,6 +8,8 @@ import mud/id.{type RoomId}
 import mud/player
 import mud/world
 
+// ----- State ------------------------------------------------------------
+
 pub type State {
   State(
     subject: Subject(player.Message),
@@ -23,11 +25,15 @@ pub type Status {
   InGame(player: player.State)
 }
 
+// ----- Effect -----------------------------------------------------------
+
 pub type Effect {
   Do(player.Action)
   Join(event.Session, RoomId)
   Stop
 }
+
+// ----- Logic ------------------------------------------------------------
 
 pub fn started(
   subject: Subject(player.Message),
@@ -42,8 +48,16 @@ pub fn started(
   #(state, effects)
 }
 
+pub fn closed(state: State) -> List(Effect) {
+  case state.status {
+    AwaitingName -> []
+    InGame(_) -> [Do(player.Leave)]
+  }
+}
+
 const max_line = 1024
 
+// for bytes received from the socket
 pub fn receive_bytes(state: State, chunk: BitArray) -> #(State, List(Effect)) {
   let #(buffer, lines) = take_lines(state.buffer, chunk)
   let state = State(..state, buffer:)
@@ -108,6 +122,7 @@ pub fn join_failed(state: State) -> #(State, List(Effect)) {
   ])
 }
 
+// for messages received from other processes
 pub fn receive_message(
   state: State,
   message: player.Message,
@@ -121,12 +136,7 @@ pub fn receive_message(
   }
 }
 
-pub fn closed(state: State) -> List(Effect) {
-  case state.status {
-    AwaitingName -> []
-    InGame(_) -> [Do(player.Leave)]
-  }
-}
+// ----- Line decoding and handling ---------------------------------------
 
 pub fn take_lines(
   buffer: BitArray,

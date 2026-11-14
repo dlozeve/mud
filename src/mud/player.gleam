@@ -8,13 +8,19 @@ import mud/event.{type RoomEvent}
 import mud/id.{type PlayerId}
 import mud/world
 
-pub type Message {
-  Event(RoomEvent)
-}
+// ----- State ------------------------------------------------------------
 
 pub type State {
   State(id: PlayerId, name: String, world: Subject(world.Message))
 }
+
+// ----- Message ----------------------------------------------------------
+
+pub type Message {
+  Event(RoomEvent)
+}
+
+// ----- Action -----------------------------------------------------------
 
 pub type Action {
   Output(String)
@@ -25,6 +31,9 @@ pub type Action {
   Unknown(String)
 }
 
+// ----- Logic ------------------------------------------------------------
+
+// for user commands
 pub fn decide_command(
   state: State,
   command: Command,
@@ -38,6 +47,7 @@ pub fn decide_command(
   }
 }
 
+// for messages from other processes
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
     Event(room_event) -> #(state, [Output(render(room_event))])
@@ -78,6 +88,8 @@ fn describe_exits(exits: List(Direction)) -> String {
     }
   }
 }
+
+// ------ Public helpers --------------------------------------------------
 
 fn to_listener(player: Subject(Message)) -> event.Listener {
   event.Listener(fn(room_event) { process.send(player, Event(room_event)) })

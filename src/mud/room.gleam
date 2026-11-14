@@ -5,39 +5,27 @@ import gleam/otp/actor
 import mud/event
 import mud/id.{type PlayerId, type RoomId}
 
+// ----- State ------------------------------------------------------------
+
+pub type State {
+  State(id: RoomId, occupants: Dict(PlayerId, event.Session))
+}
+
+// ----- Message ----------------------------------------------------------
+
 pub type Message {
   Enter(session: event.Session)
   Leave(player: PlayerId)
   Say(speaker: PlayerId, text: String)
 }
 
-pub type State {
-  State(id: RoomId, occupants: Dict(PlayerId, event.Session))
-}
-
-pub fn handle_message(
-  state: State,
-  message: Message,
-) -> actor.Next(State, Message) {
-  let #(state, actions) = decide(state, message)
-  list.each(actions, run(_, state))
-  actor.continue(state)
-}
+// ----- Action -----------------------------------------------------------
 
 pub type Action {
   Tell(player: PlayerId, room_event: event.RoomEvent)
 }
 
-fn run(action: Action, state: State) -> Nil {
-  case action {
-    Tell(player, room_event) -> {
-      case dict.get(state.occupants, player) {
-        Ok(session) -> session.listener.tell(room_event)
-        Error(_) -> Nil
-      }
-    }
-  }
-}
+// ----- Logic ------------------------------------------------------------
 
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
@@ -104,6 +92,30 @@ fn tell_others(
   |> dict.keys
   |> list.map(Tell(_, room_event))
 }
+
+// ----- Execution --------------------------------------------------------
+
+fn run(action: Action, state: State) -> Nil {
+  case action {
+    Tell(player, room_event) -> {
+      case dict.get(state.occupants, player) {
+        Ok(session) -> session.listener.tell(room_event)
+        Error(_) -> Nil
+      }
+    }
+  }
+}
+
+pub fn handle_message(
+  state: State,
+  message: Message,
+) -> actor.Next(State, Message) {
+  let #(state, actions) = decide(state, message)
+  list.each(actions, run(_, state))
+  actor.continue(state)
+}
+
+// ------ Public helpers --------------------------------------------------
 
 pub fn enter(room: process.Name(Message), session: event.Session) -> Nil {
   actor.send(process.named_subject(room), Enter(session))

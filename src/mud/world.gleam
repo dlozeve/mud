@@ -7,21 +7,12 @@ import mud/event
 import mud/id.{type PlayerId, type RoomId}
 import mud/room
 
-pub type Message {
-  Join(
-    session: event.Session,
-    at: RoomId,
-    reply_to: Subject(Result(Nil, JoinError)),
-  )
-  Move(player: PlayerId, dir: Direction)
-  Leave(player: PlayerId)
-  PlayerSays(player: PlayerId, text: String)
-  Look(player: PlayerId)
-}
+// ----- State ------------------------------------------------------------
 
-pub type JoinError {
-  NameTaken
-  NoSuchRoom
+pub type State {
+  // Rooms own occupancy. `members` is just an index over all the rooms `occupancy` maps.
+  // Convergence is eventual.
+  State(rooms: Dict(RoomId, RoomInfo), members: Dict(PlayerId, Member))
 }
 
 pub type RoomInfo {
@@ -38,20 +29,21 @@ pub type Member {
   Member(session: event.Session, at: RoomId)
 }
 
-pub type State {
-  // Rooms own occupancy. `members` is just an index over all the rooms `occupancy` maps.
-  // Convergence is eventual.
-  State(rooms: Dict(RoomId, RoomInfo), members: Dict(PlayerId, Member))
+// ----- Message ----------------------------------------------------------
+
+pub type Message {
+  Join(
+    session: event.Session,
+    at: RoomId,
+    reply_to: Subject(Result(Nil, JoinError)),
+  )
+  Move(player: PlayerId, dir: Direction)
+  Leave(player: PlayerId)
+  PlayerSays(player: PlayerId, text: String)
+  Look(player: PlayerId)
 }
 
-pub fn handle_message(
-  state: State,
-  message: Message,
-) -> actor.Next(State, Message) {
-  let #(state, actions) = decide(state, message)
-  list.each(actions, run)
-  actor.continue(state)
-}
+// ----- Action -----------------------------------------------------------
 
 pub type Action {
   DescribeRoom(
@@ -69,20 +61,12 @@ pub type Action {
   )
 }
 
-fn run(action: Action) -> Nil {
-  case action {
-    DescribeRoom(session, room_name, room_description, exits) ->
-      session.listener.tell(event.YouAreIn(
-        room_name:,
-        room_description:,
-        exits:,
-      ))
-    EnterRoom(session, room) -> room.enter(room, session)
-    LeaveRoom(player, room) -> room.leave(room, player)
-    Say(player_id, room, text) -> room.say(room, player_id, text)
-    Reply(reply_to, result) -> actor.send(reply_to, result)
-  }
+pub type JoinError {
+  NameTaken
+  NoSuchRoom
 }
+
+// ----- Logic ------------------------------------------------------------
 
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
@@ -214,6 +198,34 @@ fn resolve_direction(
     Error(_) -> Error(Nil)
   }
 }
+
+// ----- Execution --------------------------------------------------------
+
+fn run(action: Action) -> Nil {
+  case action {
+    DescribeRoom(session, room_name, room_description, exits) ->
+      session.listener.tell(event.YouAreIn(
+        room_name:,
+        room_description:,
+        exits:,
+      ))
+    EnterRoom(session, room) -> room.enter(room, session)
+    LeaveRoom(player, room) -> room.leave(room, player)
+    Say(player_id, room, text) -> room.say(room, player_id, text)
+    Reply(reply_to, result) -> actor.send(reply_to, result)
+  }
+}
+
+pub fn handle_message(
+  state: State,
+  message: Message,
+) -> actor.Next(State, Message) {
+  let #(state, actions) = decide(state, message)
+  list.each(actions, run)
+  actor.continue(state)
+}
+
+// ------ Public helpers --------------------------------------------------
 
 pub fn join(
   world: Subject(Message),
