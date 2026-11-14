@@ -82,6 +82,14 @@ pub fn receive_bytes_invalid_name_test() {
   assert new_state.status == session.AwaitingName
 }
 
+pub fn join_failed_test() {
+  let state = in_game_state()
+  let #(state, effects) = session.join_failed(state)
+  assert state.status == session.AwaitingName
+  assert effects
+    == [session.Do(player.Output("Name taken. Choose another name: "))]
+}
+
 fn effects(r: #(session.State, List(session.Effect))) -> List(session.Effect) {
   let #(_, effects) = r
   effects

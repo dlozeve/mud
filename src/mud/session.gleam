@@ -102,6 +102,12 @@ fn valid_name(line: String) -> Result(String, Nil) {
   }
 }
 
+pub fn join_failed(state: State) -> #(State, List(Effect)) {
+  #(State(..state, status: AwaitingName), [
+    Do(player.Output("Name taken. Choose another name: ")),
+  ])
+}
+
 pub fn receive_message(
   state: State,
   message: player.Message,

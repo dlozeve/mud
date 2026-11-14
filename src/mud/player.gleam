@@ -1,7 +1,6 @@
 import gleam/erlang/process.{type Subject}
 import gleam/int
 import gleam/list
-import gleam/otp/actor
 import gleam/string
 import mud/command.{type Command}
 import mud/direction.{type Direction}
@@ -11,7 +10,6 @@ import mud/world
 
 pub type Message {
   Event(RoomEvent)
-  Input(Command)
 }
 
 pub type State {
@@ -43,7 +41,6 @@ pub fn decide_command(
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
     Event(room_event) -> #(state, [Output(render(room_event))])
-    Input(command) -> decide_command(state, command)
   }
 }
 
@@ -88,8 +85,4 @@ fn to_listener(player: Subject(Message)) -> event.Listener {
 
 pub fn to_session(player: Subject(Message), state: State) -> event.Session {
   event.Session(state.id, state.name, to_listener(player))
-}
-
-pub fn input(player: Subject(Message), command: Command) -> Nil {
-  actor.send(player, Input(command))
 }

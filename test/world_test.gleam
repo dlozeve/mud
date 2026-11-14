@@ -56,11 +56,14 @@ pub fn join_emits_arrive_then_enter_test() {
   let r1 = id.new_room_id("r1")
   let entrance = room_with(r1, "entrance", dict.new())
   let state = state_with([entrance], [])
+  let reply_to = process.new_subject()
 
-  let #(new_state, actions) = world.decide(state, world.Join(alice, r1))
+  let #(new_state, actions) =
+    world.decide(state, world.Join(alice, r1, reply_to))
 
   assert actions
     == [
+      world.Reply(reply_to, Ok(Nil)),
       world.DescribeRoom(
         alice,
         entrance.name,
@@ -72,28 +75,32 @@ pub fn join_emits_arrive_then_enter_test() {
   assert dict.get(new_state.members, alice.id) == Ok(world.Member(alice, r1))
 }
 
-pub fn join_existing_member_emits_nothing_test() {
+pub fn join_existing_member_name_taken_test() {
   let alice = session_with("alice")
   let r1 = id.new_room_id("r1")
   let entrance = room_with(r1, "entrance", dict.new())
   let state = state_with([entrance], [#(alice, r1)])
+  let reply_to = process.new_subject()
 
-  let #(new_state, actions) = world.decide(state, world.Join(alice, r1))
+  let #(new_state, actions) =
+    world.decide(state, world.Join(alice, r1, reply_to))
 
-  assert actions == []
+  assert actions == [world.Reply(reply_to, Error(world.NameTaken))]
   assert dict.get(new_state.members, alice.id) == Ok(world.Member(alice, r1))
 }
 
-pub fn join_unknown_room_emits_nothing_test() {
+pub fn join_unknown_room_test() {
   let alice = session_with("alice")
   let r1 = id.new_room_id("r1")
   let r2 = id.new_room_id("r2")
   let entrance = room_with(r1, "entrance", dict.new())
   let state = state_with([entrance], [])
+  let reply_to = process.new_subject()
 
-  let #(new_state, actions) = world.decide(state, world.Join(alice, r2))
+  let #(new_state, actions) =
+    world.decide(state, world.Join(alice, r2, reply_to))
 
-  assert actions == []
+  assert actions == [world.Reply(reply_to, Error(world.NoSuchRoom))]
   assert result.is_error(dict.get(new_state.members, alice.id))
 }
 

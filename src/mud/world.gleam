@@ -8,11 +8,20 @@ import mud/id.{type PlayerId, type RoomId}
 import mud/room
 
 pub type Message {
-  Join(session: event.Session, at: RoomId)
+  Join(
+    session: event.Session,
+    at: RoomId,
+    reply_to: Subject(Result(Nil, JoinError)),
+  )
   Move(player: PlayerId, dir: Direction)
   Leave(player: PlayerId)
   PlayerSays(player: PlayerId, text: String)
   Look(player: PlayerId)
+}
+
+pub type JoinError {
+  NameTaken
+  NoSuchRoom
 }
 
 pub type RoomInfo {
@@ -54,6 +63,10 @@ pub type Action {
   EnterRoom(session: event.Session, room: Subject(room.Message))
   LeaveRoom(player: PlayerId, room: Subject(room.Message))
   Say(player: PlayerId, room: Subject(room.Message), text: String)
+  Reply(
+    reply_to: Subject(Result(Nil, JoinError)),
+    result: Result(Nil, JoinError),
+  )
 }
 
 fn run(action: Action) -> Nil {
@@ -68,16 +81,18 @@ fn run(action: Action) -> Nil {
     LeaveRoom(player, room_subject) -> room.leave(room_subject, player)
     Say(player_id, room_subject, text) ->
       room.say(room_subject, player_id, text)
+    Reply(reply_to, result) -> actor.send(reply_to, result)
   }
 }
 
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
-    Join(session, at) ->
+    Join(session, at, reply_to) ->
       case dict.get(state.members, session.id), dict.get(state.rooms, at) {
-        Ok(_), _ -> #(state, [])
+        Ok(_), _ -> #(state, [Reply(reply_to, Error(NameTaken))])
         Error(_), Ok(room) -> {
           let actions = [
+            Reply(reply_to, Ok(Nil)),
             DescribeRoom(
               session,
               room.name,
@@ -97,7 +112,7 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
             )
           #(new_state, actions)
         }
-        Error(_), Error(_) -> #(state, [])
+        Error(_), Error(_) -> #(state, [Reply(reply_to, Error(NoSuchRoom))])
       }
     Move(player, dir) ->
       case dict.get(state.members, player) {
@@ -201,8 +216,8 @@ pub fn join(
   world: Subject(Message),
   session: event.Session,
   at: RoomId,
-) -> Nil {
-  actor.send(world, Join(session:, at:))
+) -> Result(Nil, JoinError) {
+  actor.call(world, 1000, Join(session:, at:, reply_to: _))
 }
 
 pub fn move(world: Subject(Message), player: PlayerId, dir: Direction) -> Nil {
