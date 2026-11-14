@@ -26,7 +26,7 @@ pub type JoinError {
 
 pub type RoomInfo {
   RoomInfo(
-    subject: Subject(room.Message),
+    process_name: process.Name(room.Message),
     id: RoomId,
     name: String,
     description: String,
@@ -60,9 +60,9 @@ pub type Action {
     room_description: String,
     exits: List(Direction),
   )
-  EnterRoom(session: event.Session, room: Subject(room.Message))
-  LeaveRoom(player: PlayerId, room: Subject(room.Message))
-  Say(player: PlayerId, room: Subject(room.Message), text: String)
+  EnterRoom(session: event.Session, room: process.Name(room.Message))
+  LeaveRoom(player: PlayerId, room: process.Name(room.Message))
+  Say(player: PlayerId, room: process.Name(room.Message), text: String)
   Reply(
     reply_to: Subject(Result(Nil, JoinError)),
     result: Result(Nil, JoinError),
@@ -77,10 +77,9 @@ fn run(action: Action) -> Nil {
         room_description:,
         exits:,
       ))
-    EnterRoom(session, room_subject) -> room.enter(room_subject, session)
-    LeaveRoom(player, room_subject) -> room.leave(room_subject, player)
-    Say(player_id, room_subject, text) ->
-      room.say(room_subject, player_id, text)
+    EnterRoom(session, room) -> room.enter(room, session)
+    LeaveRoom(player, room) -> room.leave(room, player)
+    Say(player_id, room, text) -> room.say(room, player_id, text)
     Reply(reply_to, result) -> actor.send(reply_to, result)
   }
 }
@@ -99,7 +98,7 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
               room.description,
               dict.keys(room.exits),
             ),
-            EnterRoom(session, room.subject),
+            EnterRoom(session, room.process_name),
           ]
           let new_state =
             State(
@@ -120,14 +119,14 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
           case resolve_direction(state.rooms, member.at, dir) {
             Ok(#(from_room, to_room)) -> {
               let actions = [
-                LeaveRoom(player, from_room.subject),
+                LeaveRoom(player, from_room.process_name),
                 DescribeRoom(
                   member.session,
                   to_room.name,
                   to_room.description,
                   dict.keys(to_room.exits),
                 ),
-                EnterRoom(member.session, to_room.subject),
+                EnterRoom(member.session, to_room.process_name),
               ]
               let new_state =
                 State(
@@ -149,7 +148,9 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
       case dict.get(state.members, player) {
         Ok(member) -> {
           let actions = case dict.get(state.rooms, member.at) {
-            Ok(room) -> [LeaveRoom(player, room.subject)]
+            Ok(room) -> [
+              LeaveRoom(player, room.process_name),
+            ]
             Error(_) -> []
           }
           let new_state =
@@ -162,7 +163,9 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
       case dict.get(state.members, player) {
         Ok(member) ->
           case dict.get(state.rooms, member.at) {
-            Ok(room) -> #(state, [Say(player, room.subject, text)])
+            Ok(room) -> #(state, [
+              Say(player, room.process_name, text),
+            ])
             Error(_) -> #(state, [])
           }
         Error(_) -> #(state, [])

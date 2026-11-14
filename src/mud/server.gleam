@@ -1,6 +1,8 @@
 import gleam/bytes_tree
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option, None, Some}
+import gleam/otp/static_supervisor
+import gleam/otp/supervision
 import glisten.{type Connection}
 import glisten/socket
 import glisten/socket/options
@@ -9,13 +11,16 @@ import mud/player
 import mud/session
 import mud/world
 
-pub fn start(world: Subject(world.Message), entrance: RoomId, port: Int) {
-  let assert Ok(_) =
-    glisten.new(on_init(world, entrance), loop)
-    |> glisten.with_active_state(options.Once)
-    |> glisten.with_pool_size(4)
-    |> glisten.with_close(on_close)
-    |> glisten.start(port)
+pub fn server_child(
+  world: Subject(world.Message),
+  entrance: RoomId,
+  port: Int,
+) -> supervision.ChildSpecification(static_supervisor.Supervisor) {
+  glisten.new(on_init(world, entrance), loop)
+  |> glisten.with_active_state(options.Once)
+  |> glisten.with_pool_size(4)
+  |> glisten.with_close(on_close)
+  |> glisten.supervised(port)
 }
 
 pub fn on_init(world: Subject(world.Message), entrance: RoomId) {

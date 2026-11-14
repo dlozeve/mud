@@ -17,7 +17,7 @@ fn room_with(
   exits: Dict(Direction, RoomId),
 ) -> world.RoomInfo {
   world.RoomInfo(
-    process.new_subject(),
+    process.new_name(name),
     id:,
     name:,
     description: name <> " description",
@@ -70,7 +70,7 @@ pub fn join_emits_arrive_then_enter_test() {
         entrance.description,
         dict.keys(entrance.exits),
       ),
-      world.EnterRoom(alice, entrance.subject),
+      world.EnterRoom(alice, entrance.process_name),
     ]
   assert dict.get(new_state.members, alice.id) == Ok(world.Member(alice, r1))
 }
@@ -114,14 +114,14 @@ pub fn move_emits_leave_then_arrive_then_enter_test() {
 
   assert actions
     == [
-      world.LeaveRoom(alice.id, entrance.subject),
+      world.LeaveRoom(alice.id, entrance.process_name),
       world.DescribeRoom(
         alice,
         corridor.name,
         corridor.description,
         dict.keys(corridor.exits),
       ),
-      world.EnterRoom(alice, corridor.subject),
+      world.EnterRoom(alice, corridor.process_name),
     ]
   assert dict.get(new_state.members, alice.id)
     == Ok(world.Member(alice, corridor.id))
@@ -185,7 +185,7 @@ pub fn leave_member_removed_test() {
 
   let #(new_state, actions) = world.decide(state, world.Leave(alice.id))
 
-  assert actions == [world.LeaveRoom(alice.id, entrance.subject)]
+  assert actions == [world.LeaveRoom(alice.id, entrance.process_name)]
   assert result.is_error(dict.get(new_state.members, alice.id))
 }
 
@@ -207,7 +207,7 @@ pub fn player_says_emits_say_test() {
 
   let #(_, actions) = world.decide(state, world.PlayerSays(alice.id, "hi"))
 
-  assert actions == [world.Say(alice.id, entrance.subject, "hi")]
+  assert actions == [world.Say(alice.id, entrance.process_name, "hi")]
 }
 
 pub fn player_says_from_unknown_member_emits_nothing_test() {

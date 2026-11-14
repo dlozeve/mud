@@ -1,5 +1,5 @@
 import gleam/dict.{type Dict}
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process
 import gleam/list
 import gleam/otp/actor
 import mud/event
@@ -105,14 +105,18 @@ fn tell_others(
   |> list.map(Tell(_, room_event))
 }
 
-pub fn enter(room: Subject(Message), session: event.Session) -> Nil {
-  actor.send(room, Enter(session))
+pub fn enter(room: process.Name(Message), session: event.Session) -> Nil {
+  actor.send(process.named_subject(room), Enter(session))
 }
 
-pub fn leave(room: Subject(Message), player: PlayerId) -> Nil {
-  actor.send(room, Leave(player:))
+pub fn leave(room: process.Name(Message), player: PlayerId) -> Nil {
+  actor.send(process.named_subject(room), Leave(player:))
 }
 
-pub fn say(room: Subject(Message), speaker: PlayerId, text: String) -> Nil {
-  actor.send(room, Say(speaker:, text:))
+pub fn say(
+  room: process.Name(Message),
+  speaker: PlayerId,
+  text: String,
+) -> Nil {
+  actor.send(process.named_subject(room), Say(speaker:, text:))
 }
