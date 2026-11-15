@@ -12,14 +12,13 @@ import mud/server
 import mud/world
 
 fn room_child(
-  name: process.Name(room.Message),
   def: room.Def,
 ) -> supervision.ChildSpecification(Subject(room.Message)) {
   let state = room.State(def:, occupants: dict.new())
   supervision.worker(fn() {
     actor.new(state)
     |> actor.on_message(room.handle_message)
-    |> actor.named(name)
+    |> actor.named(def.process_name)
     |> actor.start
   })
 }
@@ -40,14 +39,10 @@ fn world_child(
 
 pub fn main() -> Nil {
   let entrance_id = id.new_room_id("entrance")
-  let entrance_name = process.new_name("entrance")
-
   let corridor_id = id.new_room_id("corridor")
-  let corridor_name = process.new_name("corridor")
-
   let entrance =
     room.Def(
-      process_name: entrance_name,
+      process_name: process.new_name("entrance"),
       id: entrance_id,
       name: "the dungeon entrance",
       description: "The bottom of an enormous stone staircase. Dark and ominous. Slow rumble coming from below.",
@@ -55,15 +50,15 @@ pub fn main() -> Nil {
     )
   let corridor =
     room.Def(
-      process_name: corridor_name,
+      process_name: process.new_name("corridor"),
       id: corridor_id,
       name: "a dimly-lit corridor",
       description: "Long and narrow, with a few torches on the walls. Damp.",
       exits: dict.from_list([#(direction.South, entrance_id)]),
     )
 
-  let entrance_child = room_child(entrance_name, entrance)
-  let corridor_child = room_child(corridor_name, corridor)
+  let entrance_child = room_child(entrance)
+  let corridor_child = room_child(corridor)
 
   let world_name = process.new_name("world")
   let world_child = world_child(world_name, [entrance, corridor])
