@@ -149,8 +149,8 @@ pub fn receive_message(
       }
     player.JoinTimeout ->
       case state.status {
-        Joining(_, _) -> #(state, [
-          Do(player.Output("The world is not answering, try again.")),
+        Joining(_, _) -> #(State(..state, status: AwaitingName), [
+          Do(player.Output("The world is not answering, try again: ")),
         ])
         _ -> #(state, [])
       }
