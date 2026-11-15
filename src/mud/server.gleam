@@ -91,7 +91,6 @@ fn run_effects(
                 to_room.process_name,
                 player.to_session(state.subject, player),
               )
-              room.look(to_room.process_name, player.id)
               Ok(session.State(..state, status: session.InGame(player)))
             }
             session.AwaitingName -> Error(Unexpected)
@@ -136,7 +135,6 @@ fn run_effect(
             to_room.process_name,
             player.to_session(state.subject, player),
           )
-          room.look(player.room.process_name, player.id)
           Ok(with_player(state, fn(p) { player.State(..p, room: to_room) }))
         }
         Error(_) ->
