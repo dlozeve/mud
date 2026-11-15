@@ -21,7 +21,7 @@ pub type Message {
 
 pub type Reply {
   Joined(Result(room.Def, JoinError))
-  Moved(Result(room.Def, MoveError))
+  Moved(from: RoomId, result: Result(room.Def, MoveError))
 }
 
 pub type JoinError {
@@ -57,8 +57,12 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
       }
     Move(from, dir, reply_to) ->
       case resolve_direction(state.rooms, from, dir) {
-        Ok(to_room) -> #(state, [MoveReply(reply_to, Moved(Ok(to_room)))])
-        Error(error) -> #(state, [MoveReply(reply_to, Moved(Error(error)))])
+        Ok(to_room) -> #(state, [
+          MoveReply(reply_to, Moved(from:, result: Ok(to_room))),
+        ])
+        Error(error) -> #(state, [
+          MoveReply(reply_to, Moved(from:, result: Error(error))),
+        ])
       }
   }
 }

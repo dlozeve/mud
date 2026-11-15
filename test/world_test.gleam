@@ -99,7 +99,8 @@ pub fn move_replies_with_the_destination_room_test() {
       world.Move(from: entrance.id, dir: direction.North, reply_to: reply_to),
     )
 
-  assert actions == [world.MoveReply(reply_to, world.Moved(Ok(corridor)))]
+  assert actions
+    == [world.MoveReply(reply_to, world.Moved(entrance.id, Ok(corridor)))]
   assert new_state == state
 }
 
@@ -115,7 +116,12 @@ pub fn move_without_an_exit_test() {
     )
 
   assert actions
-    == [world.MoveReply(reply_to, world.Moved(Error(world.NonExistingExit)))]
+    == [
+      world.MoveReply(
+        reply_to,
+        world.Moved(entrance.id, Error(world.NonExistingExit)),
+      ),
+    ]
   assert new_state == state
 }
 
@@ -132,7 +138,12 @@ pub fn move_into_a_missing_room_test() {
     )
 
   assert actions
-    == [world.MoveReply(reply_to, world.Moved(Error(world.NonExistingRoom)))]
+    == [
+      world.MoveReply(
+        reply_to,
+        world.Moved(entrance.id, Error(world.NonExistingRoom)),
+      ),
+    ]
   assert new_state == state
 }
 
@@ -152,6 +163,11 @@ pub fn move_from_an_unknown_room_test() {
     )
 
   assert actions
-    == [world.MoveReply(reply_to, world.Moved(Error(world.NonExistingRoom)))]
+    == [
+      world.MoveReply(
+        reply_to,
+        world.Moved(id.new_room_id("nowhere"), Error(world.NonExistingRoom)),
+      ),
+    ]
   assert new_state == state
 }

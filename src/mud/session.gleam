@@ -170,10 +170,14 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
         AwaitingName -> #(state, [])
         InGame(_) -> #(state, [])
       }
-    world.Joined(Error(join_error)) -> join_failed(state, join_error)
-    world.Moved(Ok(to_room)) ->
+    world.Joined(Error(join_error)) ->
       case state.status {
-        InGame(player_state) -> {
+        Joining(_, _) -> join_failed(state, join_error)
+        _ -> #(state, [])
+      }
+    world.Moved(from, Ok(to_room)) ->
+      case state.status {
+        InGame(player_state) if player_state.room.id == from -> {
           let from_room = player_state.room
           let new_player_state = player.State(..player_state, room: to_room)
           #(State(..state, status: InGame(new_player_state)), [
@@ -181,11 +185,17 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
             Do(player.EnterRoom(to_room)),
           ])
         }
+        // stale reply, ignore
+        InGame(_) -> #(state, [])
         _ -> #(state, [])
       }
-    world.Moved(Error(_move_error)) -> #(state, [
-      Do(player.Output("You can't go that way.")),
-    ])
+    world.Moved(from, Error(_move_error)) ->
+      case state.status {
+        InGame(player_state) if player_state.room.id == from -> #(state, [
+          Do(player.Output("You can't go that way.")),
+        ])
+        _ -> #(state, [])
+      }
   }
 }
 
