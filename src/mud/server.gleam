@@ -187,7 +187,7 @@ fn run_effect(
   }
 }
 
-fn describe(room: world.RoomInfo) -> event.RoomEvent {
+fn describe(room: room.Def) -> event.RoomEvent {
   event.YouAreIn(
     room_name: room.name,
     room_description: room.description,

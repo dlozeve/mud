@@ -6,16 +6,16 @@ import gleam/otp/actor
 import gleam/otp/static_supervisor
 import gleam/otp/supervision
 import mud/direction
-import mud/id.{type RoomId}
+import mud/id
 import mud/room
 import mud/server
 import mud/world
 
 fn room_child(
   name: process.Name(room.Message),
-  id: RoomId,
+  def: room.Def,
 ) -> supervision.ChildSpecification(Subject(room.Message)) {
-  let state = room.State(id:, occupants: dict.new())
+  let state = room.State(def:, occupants: dict.new())
   supervision.worker(fn() {
     actor.new(state)
     |> actor.on_message(room.handle_message)
@@ -26,7 +26,7 @@ fn room_child(
 
 fn world_child(
   name: process.Name(world.Message),
-  rooms: List(world.RoomInfo),
+  rooms: List(room.Def),
 ) -> supervision.ChildSpecification(Subject(world.Message)) {
   let rooms = dict.from_list(list.map(rooms, fn(r) { #(r.id, r) }))
   let state = world.State(rooms:)
@@ -46,7 +46,7 @@ pub fn main() -> Nil {
   let corridor_name = process.new_name("corridor")
 
   let entrance =
-    world.RoomInfo(
+    room.Def(
       process_name: entrance_name,
       id: entrance_id,
       name: "the dungeon entrance",
@@ -54,7 +54,7 @@ pub fn main() -> Nil {
       exits: dict.from_list([#(direction.North, corridor_id)]),
     )
   let corridor =
-    world.RoomInfo(
+    room.Def(
       process_name: corridor_name,
       id: corridor_id,
       name: "a dimly-lit corridor",
@@ -62,8 +62,8 @@ pub fn main() -> Nil {
       exits: dict.from_list([#(direction.South, entrance_id)]),
     )
 
-  let entrance_child = room_child(entrance_name, entrance_id)
-  let corridor_child = room_child(corridor_name, corridor_id)
+  let entrance_child = room_child(entrance_name, entrance)
+  let corridor_child = room_child(corridor_name, corridor)
 
   let world_name = process.new_name("world")
   let world_child = world_child(world_name, [entrance, corridor])

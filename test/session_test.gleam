@@ -6,8 +6,8 @@ import mud/direction
 import mud/event
 import mud/id
 import mud/player
+import mud/room
 import mud/session
-import mud/world
 
 // ----- Line decoding ----------------------------------------------------
 
@@ -34,8 +34,8 @@ pub fn take_lines_utf8_split_across_chunks_test() {
 
 // ----- Helpers ----------------------------------------------------------
 
-fn room_info(name: String) -> world.RoomInfo {
-  world.RoomInfo(
+fn room_info(name: String) -> room.Def {
+  room.Def(
     process_name: process.new_name(name),
     id: id.new_room_id(name),
     name: name,

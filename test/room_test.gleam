@@ -1,4 +1,5 @@
 import gleam/dict
+import gleam/erlang/process
 import gleam/list
 import gleam/set
 import mud/event
@@ -15,7 +16,13 @@ fn session_with(name: String) -> event.Session {
 
 fn state_with(sessions: List(event.Session)) -> room.State {
   room.State(
-    id: id.new_room_id("r1"),
+    def: room.Def(
+      process_name: process.new_name("r1"),
+      id: id.new_room_id("r1"),
+      name: "room",
+      description: "room description",
+      exits: dict.new(),
+    ),
     occupants: dict.from_list(
       list.map(sessions, fn(session) { #(session.id, session) }),
     ),

@@ -6,6 +6,7 @@ import mud/command.{type Command}
 import mud/direction.{type Direction}
 import mud/event.{type RoomEvent}
 import mud/id.{type PlayerId}
+import mud/room
 import mud/world
 
 // ----- State ------------------------------------------------------------
@@ -15,7 +16,7 @@ pub type State {
     id: PlayerId,
     name: String,
     world: Subject(world.Message),
-    room: world.RoomInfo,
+    room: room.Def,
   )
 }
 

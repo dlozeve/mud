@@ -5,7 +5,7 @@ import mud/direction
 import mud/event
 import mud/id
 import mud/player
-import mud/world
+import mud/room
 
 pub fn render_arrive_to_self_test() {
   assert player.render(
@@ -46,8 +46,8 @@ pub fn render_say_to_other_test() {
   assert player.render(event.PlayerSaid("Alice", "hi")) == "Alice says: hi"
 }
 
-fn room() -> world.RoomInfo {
-  world.RoomInfo(
+fn room() -> room.Def {
+  room.Def(
     process_name: process.new_name("room"),
     id: id.new_room_id("room"),
     name: "a room",

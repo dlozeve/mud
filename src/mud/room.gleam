@@ -2,13 +2,24 @@ import gleam/dict.{type Dict}
 import gleam/erlang/process
 import gleam/list
 import gleam/otp/actor
+import mud/direction.{type Direction}
 import mud/event
 import mud/id.{type PlayerId, type RoomId}
 
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  State(id: RoomId, occupants: Dict(PlayerId, event.Session))
+  State(def: Def, occupants: Dict(PlayerId, event.Session))
+}
+
+pub type Def {
+  Def(
+    process_name: process.Name(Message),
+    id: RoomId,
+    name: String,
+    description: String,
+    exits: Dict(Direction, RoomId),
+  )
 }
 
 // ----- Message ----------------------------------------------------------

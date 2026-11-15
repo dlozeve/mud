@@ -9,27 +9,17 @@ import mud/room
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  State(rooms: Dict(RoomId, RoomInfo))
-}
-
-pub type RoomInfo {
-  RoomInfo(
-    process_name: process.Name(room.Message),
-    id: RoomId,
-    name: String,
-    description: String,
-    exits: Dict(Direction, RoomId),
-  )
+  State(rooms: Dict(RoomId, room.Def))
 }
 
 // ----- Message ----------------------------------------------------------
 
 pub type Message {
-  Join(at: RoomId, reply_to: Subject(Result(RoomInfo, JoinError)))
+  Join(at: RoomId, reply_to: Subject(Result(room.Def, JoinError)))
   Move(
     from: RoomId,
     dir: Direction,
-    reply_to: Subject(Result(RoomInfo, MoveError)),
+    reply_to: Subject(Result(room.Def, MoveError)),
   )
 }
 
@@ -46,12 +36,12 @@ pub type MoveError {
 
 pub type Action {
   JoinReply(
-    reply_to: Subject(Result(RoomInfo, JoinError)),
-    result: Result(RoomInfo, JoinError),
+    reply_to: Subject(Result(room.Def, JoinError)),
+    result: Result(room.Def, JoinError),
   )
   MoveReply(
-    reply_to: Subject(Result(RoomInfo, MoveError)),
-    result: Result(RoomInfo, MoveError),
+    reply_to: Subject(Result(room.Def, MoveError)),
+    result: Result(room.Def, MoveError),
   )
 }
 
@@ -74,10 +64,10 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
 }
 
 fn resolve_direction(
-  rooms: Dict(RoomId, RoomInfo),
+  rooms: Dict(RoomId, room.Def),
   at: RoomId,
   dir: Direction,
-) -> Result(RoomInfo, MoveError) {
+) -> Result(room.Def, MoveError) {
   case dict.get(rooms, at) {
     Ok(from_room) ->
       case dict.get(from_room.exits, dir) {
@@ -115,7 +105,7 @@ pub fn handle_message(
 pub fn join(
   world: Subject(Message),
   at: RoomId,
-) -> Result(RoomInfo, JoinError) {
+) -> Result(room.Def, JoinError) {
   actor.call(world, 1000, Join(at:, reply_to: _))
 }
 
@@ -123,6 +113,6 @@ pub fn move(
   world: Subject(Message),
   from: RoomId,
   dir: Direction,
-) -> Result(RoomInfo, MoveError) {
+) -> Result(room.Def, MoveError) {
   actor.call(world, 1000, Move(from:, dir:, reply_to: _))
 }

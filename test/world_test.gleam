@@ -3,14 +3,15 @@ import gleam/erlang/process
 import gleam/list
 import mud/direction.{type Direction}
 import mud/id.{type RoomId}
+import mud/room
 import mud/world
 
 fn room_with(
   id: RoomId,
   name: String,
   exits: Dict(Direction, RoomId),
-) -> world.RoomInfo {
-  world.RoomInfo(
+) -> room.Def {
+  room.Def(
     process_name: process.new_name(name),
     id: id,
     name: name,
@@ -30,7 +31,7 @@ fn rooms() {
   [entrance, corridor]
 }
 
-fn state_with(rooms: List(world.RoomInfo)) -> world.State {
+fn state_with(rooms: List(room.Def)) -> world.State {
   world.State(rooms: dict.from_list(list.map(rooms, fn(r) { #(r.id, r) })))
 }
 
