@@ -136,14 +136,16 @@ pub fn receive_message(
 ) -> #(State, List(Effect)) {
   case message {
     player.WorldMessage(reply) -> receive_reply(state, reply)
-    player.RoomMessage(room_event) ->
+    player.RoomMessage(room_id, room_event) ->
       case state.status {
-        AwaitingName -> #(state, [])
-        Joining(_, _) -> #(state, [])
-        InGame(player_state) -> {
+        InGame(player_state) if player_state.room.id == room_id -> {
           let #(_, actions) = player.decide(player_state, room_event)
           #(state, list.map(actions, Do))
         }
+        // Message from a stale room that has not updated its occupancy, ignored.
+        InGame(_) -> #(state, [])
+        AwaitingName -> #(state, [])
+        Joining(_, _) -> #(state, [])
       }
     player.JoinTimeout ->
       case state.status {

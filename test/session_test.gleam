@@ -157,21 +157,41 @@ pub fn receive_bytes_line_too_long_test() {
 
 pub fn receive_message_test() {
   let state = in_game_state()
-  assert session.receive_message(state, player.RoomMessage(event.YouSaid("hi")))
+  let assert session.InGame(player_state) = state.status
+  assert session.receive_message(
+      state,
+      player.RoomMessage(player_state.room.id, event.YouSaid("hi")),
+    )
     |> effects
     == [session.Do(player.Output("You say: hi"))]
 }
 
+pub fn receive_message_stale_room_test() {
+  let state = in_game_state()
+  assert session.receive_message(
+      state,
+      player.RoomMessage(id.new_room_id("somewhere else"), event.YouSaid("hi")),
+    )
+    |> effects
+    == []
+}
+
 pub fn receive_message_in_awaiting_name_test() {
   let state = awaiting_name_state()
-  assert session.receive_message(state, player.RoomMessage(event.YouSaid("hi")))
+  assert session.receive_message(
+      state,
+      player.RoomMessage(state.entrance, event.YouSaid("hi")),
+    )
     |> effects
     == []
 }
 
 pub fn receive_message_in_joining_test() {
   let state = joining_state()
-  assert session.receive_message(state, player.RoomMessage(event.YouSaid("hi")))
+  assert session.receive_message(
+      state,
+      player.RoomMessage(state.entrance, event.YouSaid("hi")),
+    )
     |> effects
     == []
 }

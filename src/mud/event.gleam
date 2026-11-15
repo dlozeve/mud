@@ -1,5 +1,5 @@
 import mud/direction.{type Direction}
-import mud/id.{type PlayerId}
+import mud/id.{type PlayerId, type RoomId}
 
 pub type RoomEvent {
   YouAreIn(room_name: String, room_description: String, exits: List(Direction))
@@ -10,7 +10,7 @@ pub type RoomEvent {
 }
 
 pub type Listener {
-  Listener(tell: fn(RoomEvent) -> Nil)
+  Listener(tell: fn(RoomId, RoomEvent) -> Nil)
 }
 
 pub type Session {

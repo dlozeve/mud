@@ -136,7 +136,7 @@ fn run(action: Action, state: State) -> Nil {
   case action {
     Tell(player, room_event) -> {
       case dict.get(state.occupants, player) {
-        Ok(session) -> session.listener.tell(room_event)
+        Ok(session) -> session.listener.tell(state.def.id, room_event)
         Error(_) -> Nil
       }
     }

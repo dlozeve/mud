@@ -5,7 +5,7 @@ import gleam/string
 import mud/command.{type Command}
 import mud/direction.{type Direction}
 import mud/event.{type RoomEvent}
-import mud/id.{type PlayerId}
+import mud/id.{type PlayerId, type RoomId}
 import mud/room
 import mud/world
 
@@ -23,7 +23,7 @@ pub type State {
 // ----- Message ----------------------------------------------------------
 
 pub type Message {
-  RoomMessage(RoomEvent)
+  RoomMessage(room: RoomId, event: RoomEvent)
   WorldMessage(world.Reply)
   JoinTimeout
 }
@@ -100,8 +100,8 @@ fn describe_exits(exits: List(Direction)) -> String {
 // ------ Public helpers --------------------------------------------------
 
 fn to_listener(player: Subject(Message)) -> event.Listener {
-  event.Listener(fn(room_event) {
-    process.send(player, RoomMessage(room_event))
+  event.Listener(fn(room_id, room_event) {
+    process.send(player, RoomMessage(room_id, room_event))
   })
 }
 

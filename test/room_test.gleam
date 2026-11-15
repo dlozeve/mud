@@ -10,7 +10,7 @@ fn session_with(name: String) -> event.Session {
   event.Session(
     id.new_player_id(name <> "_id"),
     name,
-    event.Listener(fn(_) { Nil }),
+    event.Listener(fn(_, _) { Nil }),
   )
 }
 
