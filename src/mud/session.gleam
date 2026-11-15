@@ -12,6 +12,7 @@ import mud/world
 pub type State {
   State(
     subject: Subject(player.Message),
+    replies: Subject(world.Reply),
     world: Subject(world.Message),
     entrance: RoomId,
     status: Status,
@@ -37,12 +38,14 @@ pub type Effect {
 
 pub fn started(
   subject: Subject(player.Message),
+  replies: Subject(world.Reply),
   world: Subject(world.Message),
   entrance: RoomId,
 ) -> #(State, List(Effect)) {
   let state =
     State(
       subject:,
+      replies:,
       world:,
       entrance: entrance,
       status: AwaitingName,
@@ -131,13 +134,56 @@ pub fn receive_message(
   state: State,
   message: player.Message,
 ) -> #(State, List(Effect)) {
-  case state.status {
-    AwaitingName -> #(state, [])
-    Joining(_, _) -> #(state, [])
-    InGame(player_state) -> {
-      let #(_, actions) = player.decide(player_state, message)
-      #(state, list.map(actions, Do))
-    }
+  case message {
+    player.WorldMessage(reply) -> receive_reply(state, reply)
+    player.RoomMessage(room_event) ->
+      case state.status {
+        AwaitingName -> #(state, [])
+        Joining(_, _) -> #(state, [])
+        InGame(player_state) -> {
+          let #(_, actions) = player.decide(player_state, room_event)
+          #(state, list.map(actions, Do))
+        }
+      }
+    player.JoinTimeout ->
+      case state.status {
+        Joining(_, _) -> #(state, [
+          Do(player.Output("The world is not answering, try again.")),
+        ])
+        _ -> #(state, [])
+      }
+  }
+}
+
+fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
+  case reply {
+    world.Joined(Ok(room)) ->
+      case state.status {
+        Joining(id:, name:) -> {
+          let player_state = player.State(id:, name:, room:, world: state.world)
+          #(State(..state, status: InGame(player_state)), [
+            Do(player.EnterRoom(room)),
+          ])
+        }
+        AwaitingName -> #(state, [])
+        InGame(_) -> #(state, [])
+      }
+    world.Joined(Error(join_error)) -> join_failed(state, join_error)
+    world.Moved(Ok(to_room)) ->
+      case state.status {
+        InGame(player_state) -> {
+          let from_room = player_state.room
+          let new_player_state = player.State(..player_state, room: to_room)
+          #(State(..state, status: InGame(new_player_state)), [
+            Do(player.LeaveRoom(from_room.process_name)),
+            Do(player.EnterRoom(to_room)),
+          ])
+        }
+        _ -> #(state, [])
+      }
+    world.Moved(Error(_move_error)) -> #(state, [
+      Do(player.Output("You can't go that way.")),
+    ])
   }
 }
 

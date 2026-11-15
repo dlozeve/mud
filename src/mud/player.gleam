@@ -23,7 +23,9 @@ pub type State {
 // ----- Message ----------------------------------------------------------
 
 pub type Message {
-  Event(RoomEvent)
+  RoomMessage(RoomEvent)
+  WorldMessage(world.Reply)
+  JoinTimeout
 }
 
 // ----- Action -----------------------------------------------------------
@@ -34,6 +36,8 @@ pub type Action {
   Move(Direction)
   Look
   Leave
+  EnterRoom(room.Def)
+  LeaveRoom(process.Name(room.Message))
   Unknown(String)
 }
 
@@ -54,10 +58,8 @@ pub fn decide_command(
 }
 
 // for messages from other processes
-pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
-  case message {
-    Event(room_event) -> #(state, [Output(render(room_event))])
-  }
+pub fn decide(state: State, room_event: RoomEvent) -> #(State, List(Action)) {
+  #(state, [Output(render(room_event))])
 }
 
 pub fn render(room_event: event.RoomEvent) -> String {
@@ -98,7 +100,9 @@ fn describe_exits(exits: List(Direction)) -> String {
 // ------ Public helpers --------------------------------------------------
 
 fn to_listener(player: Subject(Message)) -> event.Listener {
-  event.Listener(fn(room_event) { process.send(player, Event(room_event)) })
+  event.Listener(fn(room_event) {
+    process.send(player, RoomMessage(room_event))
+  })
 }
 
 pub fn to_session(player: Subject(Message), state: State) -> event.Session {

@@ -30,8 +30,12 @@ pub fn on_init(world: Subject(world.Message), entrance: RoomId) {
     Option(process.Selector(player.Message)),
   ) {
     let subject = process.new_subject()
-    let selector = process.new_selector() |> process.select(subject)
-    let #(state, effects) = session.started(subject, world, entrance)
+    let replies = process.new_subject()
+    let selector =
+      process.new_selector()
+      |> process.select(subject)
+      |> process.select_map(replies, player.WorldMessage)
+    let #(state, effects) = session.started(subject, replies, world, entrance)
     case run_effects(state, Some(conn), effects) {
       Ok(state) -> #(state, Some(selector))
       Error(_) -> #(state, None)
@@ -76,33 +80,14 @@ fn run_effects(
     [] -> Ok(state)
     [session.Stop, ..] -> Error(Requested)
     [session.Join(to_room_id), ..rest] ->
-      case world.join(state.world, to_room_id) {
-        Ok(to_room) ->
-          case state.status {
-            session.Joining(player_id, player_name) -> {
-              let player =
-                player.State(
-                  id: player_id,
-                  name: player_name,
-                  world: state.world,
-                  room: to_room,
-                )
-              room.enter(
-                to_room.process_name,
-                player.to_session(state.subject, player),
-              )
-              Ok(session.State(..state, status: session.InGame(player)))
-            }
-            session.AwaitingName -> Error(Unexpected)
-            session.InGame(_) -> Error(Unexpected)
-          }
-        Error(e) -> {
-          let #(state, effects) = session.join_failed(state, e)
-          case run_effects(state, conn, effects) {
-            Ok(state) -> run_effects(state, conn, rest)
-            Error(e) -> Error(e)
-          }
+      case state.status {
+        session.Joining(player_id, _player_name) -> {
+          world.join(state.world, player_id, to_room_id, state.replies)
+          let _ = process.send_after(state.subject, 5000, player.JoinTimeout)
+          run_effects(state, conn, rest)
         }
+        session.AwaitingName -> Error(Unexpected)
+        session.InGame(_) -> Error(Unexpected)
       }
     [session.Do(action), ..rest] ->
       case run_effect(state, conn, action) {
@@ -127,33 +112,24 @@ fn run_effect(
       room.say(player.room.process_name, player.id, line)
       Ok(state)
     }
-    player.Move(dir), Some(conn), Some(player) ->
-      case world.move(state.world, player.room.id, dir) {
-        Ok(to_room) -> {
-          room.leave(player.room.process_name, player.id)
-          room.enter(
-            to_room.process_name,
-            player.to_session(state.subject, player),
-          )
-          Ok(with_player(state, fn(p) { player.State(..p, room: to_room) }))
-        }
-        Error(_) ->
-          case
-            glisten.send(
-              conn,
-              bytes_tree.from_string("You can't go that way.\n"),
-            )
-          {
-            Ok(_) -> Ok(state)
-            Error(e) -> Error(SendFailed(e))
-          }
-      }
+    player.Move(dir), _, Some(player) -> {
+      world.move(state.world, player.room.id, dir, state.replies)
+      Ok(state)
+    }
     player.Look, _, Some(player) -> {
       room.look(player.room.process_name, player.id)
       Ok(state)
     }
     player.Leave, _, Some(player) -> {
       room.leave(player.room.process_name, player.id)
+      Ok(state)
+    }
+    player.EnterRoom(to_room), _, Some(player) -> {
+      room.enter(to_room.process_name, player.to_session(state.subject, player))
+      Ok(state)
+    }
+    player.LeaveRoom(room_name), _, Some(player) -> {
+      room.leave(room_name, player.id)
       Ok(state)
     }
     player.Unknown(line), Some(conn), _ ->
@@ -175,17 +151,5 @@ fn current_player(state: session.State) -> Option(player.State) {
     session.AwaitingName -> None
     session.Joining(_, _) -> None
     session.InGame(player) -> Some(player)
-  }
-}
-
-fn with_player(
-  state: session.State,
-  update: fn(player.State) -> player.State,
-) -> session.State {
-  case state.status {
-    session.AwaitingName -> state
-    session.Joining(_, _) -> state
-    session.InGame(player) ->
-      session.State(..state, status: session.InGame(update(player)))
   }
 }

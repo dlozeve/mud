@@ -3,7 +3,7 @@ import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/otp/actor
 import mud/direction.{type Direction}
-import mud/id.{type RoomId}
+import mud/id.{type PlayerId, type RoomId}
 import mud/room
 
 // ----- State ------------------------------------------------------------
@@ -15,12 +15,13 @@ pub type State {
 // ----- Message ----------------------------------------------------------
 
 pub type Message {
-  Join(at: RoomId, reply_to: Subject(Result(room.Def, JoinError)))
-  Move(
-    from: RoomId,
-    dir: Direction,
-    reply_to: Subject(Result(room.Def, MoveError)),
-  )
+  Join(player: PlayerId, at: RoomId, reply_to: Subject(Reply))
+  Move(from: RoomId, dir: Direction, reply_to: Subject(Reply))
+}
+
+pub type Reply {
+  Joined(Result(room.Def, JoinError))
+  Moved(Result(room.Def, MoveError))
 }
 
 pub type JoinError {
@@ -36,30 +37,28 @@ pub type MoveError {
 // ----- Action -----------------------------------------------------------
 
 pub type Action {
-  JoinReply(
-    reply_to: Subject(Result(room.Def, JoinError)),
-    result: Result(room.Def, JoinError),
-  )
-  MoveReply(
-    reply_to: Subject(Result(room.Def, MoveError)),
-    result: Result(room.Def, MoveError),
-  )
+  JoinReply(player: PlayerId, reply_to: Subject(Reply), result: Reply)
+  MoveReply(reply_to: Subject(Reply), result: Reply)
 }
 
 // ----- Logic ------------------------------------------------------------
 
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
-    Join(at, reply_to) ->
+    Join(player, at, reply_to) ->
       // TODO: check that the name isn't already taken
       case dict.get(state.rooms, at) {
-        Ok(room) -> #(state, [JoinReply(reply_to, Ok(room))])
-        Error(_) -> #(state, [JoinReply(reply_to, Error(NoSuchRoom))])
+        Ok(room) -> #(state, [
+          JoinReply(player:, reply_to:, result: Joined(Ok(room))),
+        ])
+        Error(_) -> #(state, [
+          JoinReply(player:, reply_to:, result: Joined(Error(NoSuchRoom))),
+        ])
       }
     Move(from, dir, reply_to) ->
       case resolve_direction(state.rooms, from, dir) {
-        Ok(to_room) -> #(state, [MoveReply(reply_to, Ok(to_room))])
-        Error(error) -> #(state, [MoveReply(reply_to, Error(error))])
+        Ok(to_room) -> #(state, [MoveReply(reply_to, Moved(Ok(to_room)))])
+        Error(error) -> #(state, [MoveReply(reply_to, Moved(Error(error)))])
       }
   }
 }
@@ -87,7 +86,7 @@ fn resolve_direction(
 
 fn run(action: Action) -> Nil {
   case action {
-    JoinReply(reply_to, result) -> actor.send(reply_to, result)
+    JoinReply(_player, reply_to, result) -> actor.send(reply_to, result)
     MoveReply(reply_to, result) -> actor.send(reply_to, result)
   }
 }
@@ -105,15 +104,18 @@ pub fn handle_message(
 
 pub fn join(
   world: Subject(Message),
+  player: PlayerId,
   at: RoomId,
-) -> Result(room.Def, JoinError) {
-  actor.call(world, 1000, Join(at:, reply_to: _))
+  reply_to: Subject(Reply),
+) -> Nil {
+  actor.send(world, Join(player:, at:, reply_to:))
 }
 
 pub fn move(
   world: Subject(Message),
   from: RoomId,
   dir: Direction,
-) -> Result(room.Def, MoveError) {
-  actor.call(world, 1000, Move(from:, dir:, reply_to: _))
+  reply_to: Subject(Reply),
+) -> Nil {
+  actor.send(world, Move(from:, dir:, reply_to:))
 }

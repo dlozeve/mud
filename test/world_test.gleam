@@ -42,11 +42,22 @@ pub fn join_replies_with_the_room_test() {
   let entrance = room_with(r1, "entrance", dict.new())
   let state = state_with([entrance])
   let reply_to = process.new_subject()
+  let player_id = id.new_player_id("alice")
 
   let #(new_state, actions) =
-    world.decide(state, world.Join(at: r1, reply_to: reply_to))
+    world.decide(
+      state,
+      world.Join(player: player_id, at: r1, reply_to: reply_to),
+    )
 
-  assert actions == [world.JoinReply(reply_to, Ok(entrance))]
+  assert actions
+    == [
+      world.JoinReply(
+        player: player_id,
+        reply_to: reply_to,
+        result: world.Joined(Ok(entrance)),
+      ),
+    ]
   assert new_state == state
 }
 
@@ -56,11 +67,22 @@ pub fn join_unknown_room_test() {
   let entrance = room_with(r1, "entrance", dict.new())
   let state = state_with([entrance])
   let reply_to = process.new_subject()
+  let player_id = id.new_player_id("alice")
 
   let #(new_state, actions) =
-    world.decide(state, world.Join(at: r2, reply_to: reply_to))
+    world.decide(
+      state,
+      world.Join(player: player_id, at: r2, reply_to: reply_to),
+    )
 
-  assert actions == [world.JoinReply(reply_to, Error(world.NoSuchRoom))]
+  assert actions
+    == [
+      world.JoinReply(
+        player: player_id,
+        reply_to: reply_to,
+        result: world.Joined(Error(world.NoSuchRoom)),
+      ),
+    ]
   assert new_state == state
 }
 
@@ -77,7 +99,7 @@ pub fn move_replies_with_the_destination_room_test() {
       world.Move(from: entrance.id, dir: direction.North, reply_to: reply_to),
     )
 
-  assert actions == [world.MoveReply(reply_to, Ok(corridor))]
+  assert actions == [world.MoveReply(reply_to, world.Moved(Ok(corridor)))]
   assert new_state == state
 }
 
@@ -92,7 +114,8 @@ pub fn move_without_an_exit_test() {
       world.Move(from: entrance.id, dir: direction.West, reply_to: reply_to),
     )
 
-  assert actions == [world.MoveReply(reply_to, Error(world.NonExistingExit))]
+  assert actions
+    == [world.MoveReply(reply_to, world.Moved(Error(world.NonExistingExit)))]
   assert new_state == state
 }
 
@@ -108,7 +131,8 @@ pub fn move_into_a_missing_room_test() {
       world.Move(from: entrance.id, dir: direction.North, reply_to: reply_to),
     )
 
-  assert actions == [world.MoveReply(reply_to, Error(world.NonExistingRoom))]
+  assert actions
+    == [world.MoveReply(reply_to, world.Moved(Error(world.NonExistingRoom)))]
   assert new_state == state
 }
 
@@ -127,6 +151,7 @@ pub fn move_from_an_unknown_room_test() {
       ),
     )
 
-  assert actions == [world.MoveReply(reply_to, Error(world.NonExistingRoom))]
+  assert actions
+    == [world.MoveReply(reply_to, world.Moved(Error(world.NonExistingRoom)))]
   assert new_state == state
 }

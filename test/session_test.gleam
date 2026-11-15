@@ -48,6 +48,7 @@ fn room_info(name: String) -> room.Def {
 fn state_with(status: session.Status) -> session.State {
   session.State(
     subject: process.new_subject(),
+    replies: process.new_subject(),
     world: process.new_subject(),
     entrance: id.new_room_id("entrance"),
     status: status,
@@ -83,9 +84,10 @@ fn effects(r: #(session.State, List(session.Effect))) -> List(session.Effect) {
 
 pub fn started_test() {
   let subject = process.new_subject()
+  let replies = process.new_subject()
   let world = process.new_subject()
   let entrance = id.new_room_id("entrance")
-  let #(state, effects) = session.started(subject, world, entrance)
+  let #(state, effects) = session.started(subject, replies, world, entrance)
   assert effects
     == [session.Do(player.Output("Welcome to the dungeon! What is your name?"))]
   assert state.status == session.AwaitingName
@@ -155,21 +157,21 @@ pub fn receive_bytes_line_too_long_test() {
 
 pub fn receive_message_test() {
   let state = in_game_state()
-  assert session.receive_message(state, player.Event(event.YouSaid("hi")))
+  assert session.receive_message(state, player.RoomMessage(event.YouSaid("hi")))
     |> effects
     == [session.Do(player.Output("You say: hi"))]
 }
 
 pub fn receive_message_in_awaiting_name_test() {
   let state = awaiting_name_state()
-  assert session.receive_message(state, player.Event(event.YouSaid("hi")))
+  assert session.receive_message(state, player.RoomMessage(event.YouSaid("hi")))
     |> effects
     == []
 }
 
 pub fn receive_message_in_joining_test() {
   let state = joining_state()
-  assert session.receive_message(state, player.Event(event.YouSaid("hi")))
+  assert session.receive_message(state, player.RoomMessage(event.YouSaid("hi")))
     |> effects
     == []
 }

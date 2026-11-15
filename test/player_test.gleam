@@ -67,7 +67,7 @@ fn state() -> player.State {
 
 pub fn decide_event_renders_to_output_test() {
   let s = state()
-  assert player.decide(s, player.Event(event.PlayerSaid("Bob", "hi")))
+  assert player.decide(s, event.PlayerSaid("Bob", "hi"))
     == #(s, [player.Output("Bob says: hi")])
 }
 
