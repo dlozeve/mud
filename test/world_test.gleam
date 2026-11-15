@@ -171,3 +171,20 @@ pub fn move_from_an_unknown_room_test() {
     ]
   assert new_state == state
 }
+
+// ----- Guarded sends ----------------------------------------------------
+
+// The world may be restarting, so the send must be dropped rather than
+// panicking on an unregistered name.
+pub fn sending_to_an_unregistered_world_is_dropped_test() {
+  let world_name = process.new_name("no such world")
+  let replies = process.new_subject()
+
+  world.join(
+    world_name,
+    id.new_player_id("alice"),
+    id.new_room_id("r1"),
+    replies,
+  )
+  world.move(world_name, id.new_room_id("r1"), direction.North, replies)
+}

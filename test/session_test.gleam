@@ -46,10 +46,17 @@ fn room_info(name: String) -> room.Def {
 }
 
 fn state_with(status: session.Status) -> session.State {
+  state_with_world(process.new_name("world"), status)
+}
+
+fn state_with_world(
+  world_name: process.Name(world.Message),
+  status: session.Status,
+) -> session.State {
   session.State(
     subject: process.new_subject(),
     replies: process.new_subject(),
-    world: process.new_name("world"),
+    world: world_name,
     entrance: id.new_room_id("entrance"),
     status: status,
     buffer: <<>>,
@@ -65,14 +72,19 @@ fn joining_state() -> session.State {
 }
 
 fn in_game_state() -> session.State {
+  in_room_state(room_info("a room"))
+}
+
+fn in_room_state(room: room.Def) -> session.State {
+  let world_name = process.new_name("world")
   let player_state =
     player.State(
       id: id.new_player_id("alice"),
       name: "Alice",
-      world: process.new_name("world"),
-      room: room_info("a room"),
+      world: world_name,
+      room: room,
     )
-  state_with(session.InGame(player_state))
+  state_with_world(world_name, session.InGame(player_state))
 }
 
 fn effects(r: #(session.State, List(session.Effect))) -> List(session.Effect) {
@@ -194,6 +206,206 @@ pub fn receive_message_in_joining_test() {
     )
     |> effects
     == []
+}
+
+// ----- World replies ----------------------------------------------------
+
+pub fn join_reply_starts_the_game_test() {
+  let state = joining_state()
+  let entrance = room_info("entrance")
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      player.WorldMessage(world.Joined(Ok(entrance))),
+    )
+
+  assert effects == [session.Do(player.EnterRoom(entrance))]
+  assert new_state.status
+    == session.InGame(player.State(
+      id: id.new_player_id("alice"),
+      name: "Alice",
+      world: state.world,
+      room: entrance,
+    ))
+}
+
+pub fn join_reply_when_already_in_game_is_ignored_test() {
+  let state = in_room_state(room_info("entrance"))
+  let corridor = room_info("corridor")
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      player.WorldMessage(world.Joined(Ok(corridor))),
+    )
+
+  assert effects == []
+  assert new_state.status == state.status
+}
+
+pub fn join_error_returns_to_awaiting_name_test() {
+  let state = joining_state()
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      player.WorldMessage(world.Joined(Error(world.NoSuchRoom))),
+    )
+
+  assert effects == [session.Do(player.Output("This room does not exist."))]
+  assert new_state.status == session.AwaitingName
+}
+
+pub fn join_name_taken_test() {
+  let state = joining_state()
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      player.WorldMessage(world.Joined(Error(world.NameTaken))),
+    )
+
+  assert effects
+    == [session.Do(player.Output("Name taken. Choose another name: "))]
+  assert new_state.status == session.AwaitingName
+}
+
+pub fn join_error_when_already_in_game_is_ignored_test() {
+  let state = in_room_state(room_info("entrance"))
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      player.WorldMessage(world.Joined(Error(world.NoSuchRoom))),
+    )
+
+  // A late error must not demote a player who is already in the game, or the
+  // room keeps an occupant that no session knows about.
+  assert effects == []
+  assert new_state.status == state.status
+}
+
+pub fn move_reply_relocates_the_player_test() {
+  let entrance = room_info("entrance")
+  let corridor = room_info("corridor")
+  let state = in_room_state(entrance)
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      player.WorldMessage(world.Moved(entrance.id, Ok(corridor))),
+    )
+
+  // The old room is named explicitly: by the time these effects run the player
+  // already records the new room.
+  assert effects
+    == [
+      session.Do(player.LeaveRoom(entrance.process_name)),
+      session.Do(player.EnterRoom(corridor)),
+    ]
+  assert new_state.status
+    == session.InGame(player.State(
+      id: id.new_player_id("alice"),
+      name: "Alice",
+      world: state.world,
+      room: corridor,
+    ))
+}
+
+pub fn move_reply_from_a_stale_room_is_ignored_test() {
+  let entrance = room_info("entrance")
+  let corridor = room_info("corridor")
+  let elsewhere = room_info("elsewhere")
+  let state = in_room_state(corridor)
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      player.WorldMessage(world.Moved(entrance.id, Ok(elsewhere))),
+    )
+
+  assert effects == []
+  assert new_state.status == state.status
+}
+
+pub fn move_error_test() {
+  let entrance = room_info("entrance")
+  let state = in_room_state(entrance)
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      player.WorldMessage(world.Moved(entrance.id, Error(world.NonExistingExit))),
+    )
+
+  assert effects == [session.Do(player.Output("You can't go that way."))]
+  assert new_state.status == state.status
+}
+
+pub fn move_error_from_a_stale_room_is_ignored_test() {
+  let entrance = room_info("entrance")
+  let corridor = room_info("corridor")
+  let state = in_room_state(corridor)
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      player.WorldMessage(world.Moved(entrance.id, Error(world.NonExistingExit))),
+    )
+
+  assert effects == []
+  assert new_state.status == state.status
+}
+
+pub fn join_timeout_returns_to_awaiting_name_test() {
+  let state = joining_state()
+
+  let #(new_state, effects) = session.receive_message(state, player.JoinTimeout)
+
+  assert effects
+    == [session.Do(player.Output("The world is not answering, try again: "))]
+  assert new_state.status == session.AwaitingName
+}
+
+pub fn join_timeout_while_in_game_is_ignored_test() {
+  let state = in_room_state(room_info("entrance"))
+  assert session.receive_message(state, player.JoinTimeout) |> effects == []
+}
+
+// Two moves in one packet are both dispatched from the room the player was in,
+// so the second reply is stale and must not move them a second time.
+pub fn second_move_reply_in_the_same_packet_is_ignored_test() {
+  let entrance = room_info("entrance")
+  let corridor = room_info("corridor")
+  let state = in_room_state(entrance)
+
+  let #(dispatched, dispatched_effects) =
+    session.receive_bytes(state, <<"go north\ngo north\n">>)
+  assert dispatched_effects
+    == [
+      session.Do(player.Move(direction.North)),
+      session.Do(player.Move(direction.North)),
+    ]
+
+  let #(moved, first_effects) =
+    session.receive_message(
+      dispatched,
+      player.WorldMessage(world.Moved(entrance.id, Ok(corridor))),
+    )
+  assert first_effects
+    == [
+      session.Do(player.LeaveRoom(entrance.process_name)),
+      session.Do(player.EnterRoom(corridor)),
+    ]
+
+  let #(after, second_effects) =
+    session.receive_message(
+      moved,
+      player.WorldMessage(world.Moved(entrance.id, Ok(corridor))),
+    )
+  assert second_effects == []
+  assert after.status == moved.status
 }
 
 // ----- Disconnecting ----------------------------------------------------
