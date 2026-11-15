@@ -97,8 +97,8 @@ fn run_effects(
             session.AwaitingName -> Error(Unexpected)
             session.InGame(_) -> Error(Unexpected)
           }
-        Error(_) -> {
-          let #(state, effects) = session.join_failed(state)
+        Error(e) -> {
+          let #(state, effects) = session.join_failed(state, e)
           case run_effects(state, conn, effects) {
             Ok(state) -> run_effects(state, conn, rest)
             Error(e) -> Error(e)
@@ -128,7 +128,7 @@ fn run_effect(
       room.say(player.room.process_name, player.id, line)
       Ok(state)
     }
-    player.Move(dir), _, Some(player) ->
+    player.Move(dir), Some(conn), Some(player) ->
       case world.move(state.world, player.room.id, dir) {
         Ok(to_room) -> {
           room.leave(player.room.process_name, player.id)
@@ -139,8 +139,16 @@ fn run_effect(
           room.look(player.room.process_name, player.id)
           Ok(with_player(state, fn(p) { player.State(..p, room: to_room) }))
         }
-        // TODO: tell the player that they couldn't move
-        Error(_) -> Ok(state)
+        Error(_) ->
+          case
+            glisten.send(
+              conn,
+              bytes_tree.from_string("You can't go that way.\n"),
+            )
+          {
+            Ok(_) -> Ok(state)
+            Error(e) -> Error(SendFailed(e))
+          }
       }
     player.Look, _, Some(player) -> {
       room.look(player.room.process_name, player.id)

@@ -154,7 +154,9 @@ pub fn handle_message(
 
 // ------ Public helpers --------------------------------------------------
 
-fn checked_named_subject(name: process.Name(a)) -> Result(Subject(a), Nil) {
+fn checked_named_subject(
+  name: process.Name(a),
+) -> Result(process.Subject(a), Nil) {
   case process.named(name) {
     Ok(_pid) -> Ok(process.named_subject(name))
     Error(_) -> Error(Nil)

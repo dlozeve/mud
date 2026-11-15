@@ -115,10 +115,15 @@ fn valid_name(line: String) -> Result(String, Nil) {
   }
 }
 
-pub fn join_failed(state: State) -> #(State, List(Effect)) {
-  #(State(..state, status: AwaitingName), [
-    Do(player.Output("Name taken. Choose another name: ")),
-  ])
+pub fn join_failed(
+  state: State,
+  error: world.JoinError,
+) -> #(State, List(Effect)) {
+  let msg = case error {
+    world.NoSuchRoom -> "This room does not exist."
+    world.NameTaken -> "Name taken. Choose another name: "
+  }
+  #(State(..state, status: AwaitingName), [Do(player.Output(msg))])
 }
 
 // for messages received from other processes

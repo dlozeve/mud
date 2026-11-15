@@ -8,6 +8,7 @@ import mud/id
 import mud/player
 import mud/room
 import mud/session
+import mud/world
 
 // ----- Line decoding ----------------------------------------------------
 
@@ -117,10 +118,9 @@ pub fn receive_bytes_while_joining_is_ignored_test() {
   assert session.receive_bytes(state, <<"look\n">>) |> effects == []
 }
 
-// TODO: the message is wrong for NoSuchRoom (review §4 B5).
 pub fn join_failed_test() {
   let state = joining_state()
-  let #(new_state, effects) = session.join_failed(state)
+  let #(new_state, effects) = session.join_failed(state, world.NameTaken)
   assert new_state.status == session.AwaitingName
   assert effects
     == [session.Do(player.Output("Name taken. Choose another name: "))]

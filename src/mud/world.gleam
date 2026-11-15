@@ -25,6 +25,7 @@ pub type Message {
 
 pub type JoinError {
   NoSuchRoom
+  NameTaken
 }
 
 pub type MoveError {
