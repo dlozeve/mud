@@ -1,4 +1,5 @@
 import gleam/bytes_tree
+import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option, None, Some}
 import gleam/otp/static_supervisor
@@ -6,8 +7,10 @@ import gleam/otp/supervision
 import glisten.{type Connection}
 import glisten/socket
 import glisten/socket/options
+import mud/event
 import mud/id.{type RoomId}
 import mud/player
+import mud/room
 import mud/session
 import mud/world
 
@@ -74,9 +77,34 @@ fn run_effects(
   case effects {
     [] -> Ok(state)
     [session.Stop, ..] -> Error(Requested)
-    [session.Join(session, room), ..rest] ->
-      case world.join(state.world, session, room) {
-        Ok(_) -> run_effects(state, conn, rest)
+    [session.Join(to_room_id), ..rest] ->
+      case world.join(state.world, to_room_id) {
+        Ok(to_room) ->
+          case state.status {
+            session.Joining(player_id, player_name) -> {
+              let player =
+                player.State(
+                  id: player_id,
+                  name: player_name,
+                  world: state.world,
+                  room: to_room,
+                )
+              room.enter(
+                to_room.process_name,
+                player.to_session(state.subject, player),
+              )
+              run_effects(
+                session.State(..state, status: session.InGame(player)),
+                conn,
+                [
+                  session.Do(player.Output(player.render(describe(to_room)))),
+                  ..rest
+                ],
+              )
+            }
+            session.AwaitingName -> Error(Unexpected)
+            session.InGame(_) -> Error(Unexpected)
+          }
         Error(_) -> {
           let #(state, effects) = session.join_failed(state)
           case run_effects(state, conn, effects) {
@@ -87,7 +115,7 @@ fn run_effects(
       }
     [session.Do(action), ..rest] ->
       case run_effect(state, conn, action) {
-        Ok(_) -> run_effects(state, conn, rest)
+        Ok(new_state) -> run_effects(new_state, conn, rest)
         Error(e) -> Error(e)
       }
   }
@@ -105,19 +133,47 @@ fn run_effect(
         Error(e) -> Error(SendFailed(e))
       }
     player.Say(line), _, Some(player) -> {
-      world.say(state.world, player.id, line)
+      room.say(player.room.process_name, player.id, line)
       Ok(state)
     }
-    player.Move(dir), _, Some(player) -> {
-      world.move(state.world, player.id, dir)
-      Ok(state)
-    }
-    player.Look, _, Some(player) -> {
-      world.look(state.world, player.id)
-      Ok(state)
+    player.Move(dir), _, Some(player) ->
+      case world.move(state.world, player.room.id, dir) {
+        Ok(to_room) -> {
+          room.leave(player.room.process_name, player.id)
+          room.enter(
+            to_room.process_name,
+            player.to_session(state.subject, player),
+          )
+          let new_state =
+            with_player(state, fn(p) { player.State(..p, room: to_room) })
+          case
+            run_effect(
+              new_state,
+              conn,
+              player.Output(player.render(describe(to_room))),
+            )
+          {
+            Ok(_) -> Ok(new_state)
+            Error(e) -> Error(e)
+          }
+        }
+        // TODO: tell the player that they couldn't move
+        Error(_) -> Ok(state)
+      }
+    player.Look, Some(conn), Some(player) -> {
+      // TODO replace by a proper room.look function
+      let send_result =
+        glisten.send(
+          conn,
+          bytes_tree.from_string(player.render(describe(player.room))),
+        )
+      case send_result {
+        Ok(_) -> Ok(state)
+        Error(e) -> Error(SendFailed(e))
+      }
     }
     player.Leave, _, Some(player) -> {
-      world.leave(state.world, player.id)
+      room.leave(player.room.process_name, player.id)
       Ok(state)
     }
     player.Unknown(line), Some(conn), _ ->
@@ -131,9 +187,30 @@ fn run_effect(
   }
 }
 
+fn describe(room: world.RoomInfo) -> event.RoomEvent {
+  event.YouAreIn(
+    room_name: room.name,
+    room_description: room.description,
+    exits: dict.keys(room.exits),
+  )
+}
+
 fn current_player(state: session.State) -> Option(player.State) {
   case state.status {
     session.AwaitingName -> None
+    session.Joining(_, _) -> None
     session.InGame(player) -> Some(player)
+  }
+}
+
+fn with_player(
+  state: session.State,
+  update: fn(player.State) -> player.State,
+) -> session.State {
+  case state.status {
+    session.AwaitingName -> state
+    session.Joining(_, _) -> state
+    session.InGame(player) ->
+      session.State(..state, status: session.InGame(update(player)))
   }
 }

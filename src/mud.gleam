@@ -29,7 +29,7 @@ fn world_child(
   rooms: List(world.RoomInfo),
 ) -> supervision.ChildSpecification(Subject(world.Message)) {
   let rooms = dict.from_list(list.map(rooms, fn(r) { #(r.id, r) }))
-  let state = world.State(rooms:, members: dict.new())
+  let state = world.State(rooms:)
   supervision.worker(fn() {
     actor.new(state)
     |> actor.on_message(world.handle_message)

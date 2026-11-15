@@ -3,8 +3,7 @@ import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/string
 import mud/command
-import mud/event
-import mud/id.{type RoomId}
+import mud/id.{type PlayerId, type RoomId}
 import mud/player
 import mud/world
 
@@ -22,6 +21,7 @@ pub type State {
 
 pub type Status {
   AwaitingName
+  Joining(id: PlayerId, name: String)
   InGame(player: player.State)
 }
 
@@ -29,7 +29,7 @@ pub type Status {
 
 pub type Effect {
   Do(player.Action)
-  Join(event.Session, RoomId)
+  Join(RoomId)
   Stop
 }
 
@@ -41,7 +41,13 @@ pub fn started(
   entrance: RoomId,
 ) -> #(State, List(Effect)) {
   let state =
-    State(subject:, world:, entrance:, status: AwaitingName, buffer: <<>>)
+    State(
+      subject:,
+      world:,
+      entrance: entrance,
+      status: AwaitingName,
+      buffer: <<>>,
+    )
   let effects = [
     Do(player.Output("Welcome to the dungeon! What is your name?")),
   ]
@@ -51,6 +57,7 @@ pub fn started(
 pub fn closed(state: State) -> List(Effect) {
   case state.status {
     AwaitingName -> []
+    Joining(_, _) -> []
     InGame(_) -> [Do(player.Leave)]
   }
 }
@@ -79,21 +86,13 @@ fn handle_line(state: State, line: String) -> #(State, List(Effect)) {
       case valid_name(line) {
         Error(_) -> #(state, [Do(player.Output("Invalid name, try again:"))])
         Ok(name) -> {
-          let player_state =
-            player.State(
-              // TODO: generate unique id
-              id: id.new_player_id(string.lowercase(name)),
-              name: name,
-              world: state.world,
-            )
-          let new_state = State(..state, status: InGame(player_state))
-          let effects = [
-            Join(player.to_session(state.subject, player_state), state.entrance),
-          ]
-          #(new_state, effects)
+          let new_status =
+            Joining(id.new_player_id(string.lowercase(name)), name)
+          #(State(..state, status: new_status), [Join(state.entrance)])
         }
       }
     }
+    Joining(_, _) -> #(state, [])
     InGame(player_state) ->
       case command.parse(line) {
         command.Quit -> {
@@ -129,6 +128,7 @@ pub fn receive_message(
 ) -> #(State, List(Effect)) {
   case state.status {
     AwaitingName -> #(state, [])
+    Joining(_, _) -> #(state, [])
     InGame(player_state) -> {
       let #(_, actions) = player.decide(player_state, message)
       #(state, list.map(actions, Do))

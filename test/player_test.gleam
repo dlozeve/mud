@@ -1,9 +1,11 @@
+import gleam/dict
 import gleam/erlang/process
 import mud/command
 import mud/direction
 import mud/event
 import mud/id
 import mud/player
+import mud/world
 
 pub fn render_arrive_to_self_test() {
   assert player.render(
@@ -44,8 +46,23 @@ pub fn render_say_to_other_test() {
   assert player.render(event.PlayerSaid("Alice", "hi")) == "Alice says: hi"
 }
 
+fn room() -> world.RoomInfo {
+  world.RoomInfo(
+    process_name: process.new_name("room"),
+    id: id.new_room_id("room"),
+    name: "a room",
+    description: "A room.",
+    exits: dict.new(),
+  )
+}
+
 fn state() -> player.State {
-  player.State(id.new_player_id("alice"), "Alice", process.new_subject())
+  player.State(
+    id: id.new_player_id("alice"),
+    name: "Alice",
+    world: process.new_subject(),
+    room: room(),
+  )
 }
 
 pub fn decide_event_renders_to_output_test() {
@@ -62,4 +79,24 @@ pub fn decide_command_say_test() {
 pub fn decide_command_quit_test() {
   let s = state()
   assert player.decide_command(s, command.Quit) == #(s, [player.Leave])
+}
+
+pub fn decide_command_unknown_test() {
+  let s = state()
+  assert player.decide_command(s, command.Unknown("sing"))
+    == #(s, [player.Unknown("sing")])
+}
+
+// The player carries the room it is in, so these are pure lookups.
+pub fn decide_command_reports_its_own_room_test() {
+  let s = state()
+  assert s.room.name == "a room"
+  assert s.room.id == id.new_room_id("room")
+}
+
+pub fn to_session_test() {
+  let s = state()
+  let session = player.to_session(process.new_subject(), s)
+  assert session.id == s.id
+  assert session.name == s.name
 }

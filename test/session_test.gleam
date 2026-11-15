@@ -1,4 +1,5 @@
 import gleam/bit_array
+import gleam/dict
 import gleam/erlang/process
 import gleam/string
 import mud/direction
@@ -6,6 +7,9 @@ import mud/event
 import mud/id
 import mud/player
 import mud/session
+import mud/world
+
+// ----- Line decoding ----------------------------------------------------
 
 pub fn take_lines_no_lf_test() {
   assert session.take_lines(<<>>, <<"say hi">>) == #(<<"say hi">>, [])
@@ -28,50 +32,76 @@ pub fn take_lines_utf8_split_across_chunks_test() {
   assert session.take_lines(<<195>>, <<169, 10>>) == #(<<>>, ["é"])
 }
 
-pub fn started_test() {
-  let subject = process.new_subject()
-  let world = process.new_subject()
-  let r1 = id.new_room_id("r1")
-  let #(state, effects) = session.started(subject, world, r1)
-  assert effects
-    == [session.Do(player.Output("Welcome to the dungeon! What is your name?"))]
-  assert state.status == session.AwaitingName
-  assert state.buffer == <<>>
-  assert state.entrance == r1
+// ----- Helpers ----------------------------------------------------------
+
+fn room_info(name: String) -> world.RoomInfo {
+  world.RoomInfo(
+    process_name: process.new_name(name),
+    id: id.new_room_id(name),
+    name: name,
+    description: name <> " description",
+    exits: dict.new(),
+  )
 }
 
-fn awaiting_name_state() {
-  let subject = process.new_subject()
-  let world = process.new_subject()
-  let r1 = id.new_room_id("r1")
+fn state_with(status: session.Status) -> session.State {
   session.State(
-    subject:,
-    world:,
-    entrance: r1,
-    status: session.AwaitingName,
+    subject: process.new_subject(),
+    world: process.new_subject(),
+    entrance: id.new_room_id("entrance"),
+    status: status,
     buffer: <<>>,
   )
 }
 
+fn awaiting_name_state() -> session.State {
+  state_with(session.AwaitingName)
+}
+
+fn joining_state() -> session.State {
+  state_with(session.Joining(id.new_player_id("alice"), "Alice"))
+}
+
+fn in_game_state() -> session.State {
+  let player_state =
+    player.State(
+      id: id.new_player_id("alice"),
+      name: "Alice",
+      world: process.new_subject(),
+      room: room_info("a room"),
+    )
+  state_with(session.InGame(player_state))
+}
+
+fn effects(r: #(session.State, List(session.Effect))) -> List(session.Effect) {
+  let #(_, effects) = r
+  effects
+}
+
+// ----- Connection start -------------------------------------------------
+
+pub fn started_test() {
+  let subject = process.new_subject()
+  let world = process.new_subject()
+  let entrance = id.new_room_id("entrance")
+  let #(state, effects) = session.started(subject, world, entrance)
+  assert effects
+    == [session.Do(player.Output("Welcome to the dungeon! What is your name?"))]
+  assert state.status == session.AwaitingName
+  assert state.buffer == <<>>
+  assert state.entrance == entrance
+}
+
+// ----- Naming and joining -----------------------------------------------
+
 pub fn receive_bytes_awaiting_name_test() {
   let state = awaiting_name_state()
   let #(new_state, effects) = session.receive_bytes(state, <<"Alice\n">>)
-  assert effects
-    == [
-      session.Join(
-        player.to_session(
-          state.subject,
-          player.State(id.new_player_id("alice"), "Alice", state.world),
-        ),
-        state.entrance,
-      ),
-    ]
+
+  // The session no longer knows the room: the world answers the Join.
+  assert effects == [session.Join(state.entrance)]
   assert new_state.status
-    == session.InGame(player.State(
-      id.new_player_id("alice"),
-      "Alice",
-      state.world,
-    ))
+    == session.Joining(id: id.new_player_id("alice"), name: "Alice")
 }
 
 pub fn receive_bytes_invalid_name_test() {
@@ -82,33 +112,21 @@ pub fn receive_bytes_invalid_name_test() {
   assert new_state.status == session.AwaitingName
 }
 
+pub fn receive_bytes_while_joining_is_ignored_test() {
+  let state = joining_state()
+  assert session.receive_bytes(state, <<"look\n">>) |> effects == []
+}
+
+// TODO: the message is wrong for NoSuchRoom (review §4 B5).
 pub fn join_failed_test() {
-  let state = in_game_state()
-  let #(state, effects) = session.join_failed(state)
-  assert state.status == session.AwaitingName
+  let state = joining_state()
+  let #(new_state, effects) = session.join_failed(state)
+  assert new_state.status == session.AwaitingName
   assert effects
     == [session.Do(player.Output("Name taken. Choose another name: "))]
 }
 
-fn effects(r: #(session.State, List(session.Effect))) -> List(session.Effect) {
-  let #(_, effects) = r
-  effects
-}
-
-pub fn in_game_state() -> session.State {
-  let subject = process.new_subject()
-  let world = process.new_subject()
-  let r1 = id.new_room_id("r1")
-  let player_state =
-    player.State(id: id.new_player_id("alice"), name: "Alice", world: world)
-  session.State(
-    subject:,
-    world:,
-    entrance: r1,
-    status: session.InGame(player_state),
-    buffer: <<>>,
-  )
-}
+// ----- In game ----------------------------------------------------------
 
 pub fn receive_bytes_in_game_test() {
   let state = in_game_state()
@@ -129,8 +147,8 @@ pub fn receive_bytes_in_game_test() {
 
 pub fn receive_bytes_line_too_long_test() {
   let state = in_game_state()
-  let s = string.repeat("a", times: 1025)
-  assert session.receive_bytes(state, bit_array.from_string(s))
+  let line = string.repeat("a", times: 1025)
+  assert session.receive_bytes(state, bit_array.from_string(line))
     |> effects
     == [session.Do(player.Output("Line too long.")), session.Stop]
 }
@@ -149,12 +167,23 @@ pub fn receive_message_in_awaiting_name_test() {
     == []
 }
 
+pub fn receive_message_in_joining_test() {
+  let state = joining_state()
+  assert session.receive_message(state, player.Event(event.YouSaid("hi")))
+    |> effects
+    == []
+}
+
+// ----- Disconnecting ----------------------------------------------------
+
 pub fn closed_test() {
-  let state = in_game_state()
-  assert session.closed(state) == [session.Do(player.Leave)]
+  assert session.closed(in_game_state()) == [session.Do(player.Leave)]
 }
 
 pub fn closed_in_awaiting_name_test() {
-  let state = awaiting_name_state()
-  assert session.closed(state) == []
+  assert session.closed(awaiting_name_state()) == []
+}
+
+pub fn closed_in_joining_test() {
+  assert session.closed(joining_state()) == []
 }

@@ -3,16 +3,13 @@ import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/otp/actor
 import mud/direction.{type Direction}
-import mud/event
-import mud/id.{type PlayerId, type RoomId}
+import mud/id.{type RoomId}
 import mud/room
 
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  // Rooms own occupancy. `members` is just an index over all the rooms `occupancy` maps.
-  // Convergence is eventual.
-  State(rooms: Dict(RoomId, RoomInfo), members: Dict(PlayerId, Member))
+  State(rooms: Dict(RoomId, RoomInfo))
 }
 
 pub type RoomInfo {
@@ -25,157 +22,53 @@ pub type RoomInfo {
   )
 }
 
-pub type Member {
-  Member(session: event.Session, at: RoomId)
-}
-
 // ----- Message ----------------------------------------------------------
 
 pub type Message {
-  Join(
-    session: event.Session,
-    at: RoomId,
-    reply_to: Subject(Result(Nil, JoinError)),
+  Join(at: RoomId, reply_to: Subject(Result(RoomInfo, JoinError)))
+  Move(
+    from: RoomId,
+    dir: Direction,
+    reply_to: Subject(Result(RoomInfo, MoveError)),
   )
-  Move(player: PlayerId, dir: Direction)
-  Leave(player: PlayerId)
-  PlayerSays(player: PlayerId, text: String)
-  Look(player: PlayerId)
+}
+
+pub type JoinError {
+  NoSuchRoom
+}
+
+pub type MoveError {
+  NonExistingRoom
+  NonExistingExit
 }
 
 // ----- Action -----------------------------------------------------------
 
 pub type Action {
-  DescribeRoom(
-    session: event.Session,
-    room_name: String,
-    room_description: String,
-    exits: List(Direction),
+  JoinReply(
+    reply_to: Subject(Result(RoomInfo, JoinError)),
+    result: Result(RoomInfo, JoinError),
   )
-  EnterRoom(session: event.Session, room: process.Name(room.Message))
-  LeaveRoom(player: PlayerId, room: process.Name(room.Message))
-  Say(player: PlayerId, room: process.Name(room.Message), text: String)
-  Reply(
-    reply_to: Subject(Result(Nil, JoinError)),
-    result: Result(Nil, JoinError),
+  MoveReply(
+    reply_to: Subject(Result(RoomInfo, MoveError)),
+    result: Result(RoomInfo, MoveError),
   )
-}
-
-pub type JoinError {
-  NameTaken
-  NoSuchRoom
 }
 
 // ----- Logic ------------------------------------------------------------
 
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
-    Join(session, at, reply_to) ->
-      case dict.get(state.members, session.id), dict.get(state.rooms, at) {
-        Ok(_), _ -> #(state, [Reply(reply_to, Error(NameTaken))])
-        Error(_), Ok(room) -> {
-          let actions = [
-            Reply(reply_to, Ok(Nil)),
-            DescribeRoom(
-              session,
-              room.name,
-              room.description,
-              dict.keys(room.exits),
-            ),
-            EnterRoom(session, room.process_name),
-          ]
-          let new_state =
-            State(
-              ..state,
-              members: dict.insert(
-                state.members,
-                session.id,
-                Member(session, at),
-              ),
-            )
-          #(new_state, actions)
-        }
-        Error(_), Error(_) -> #(state, [Reply(reply_to, Error(NoSuchRoom))])
+    Join(at, reply_to) ->
+      // TODO: check that the name isn't already taken
+      case dict.get(state.rooms, at) {
+        Ok(room) -> #(state, [JoinReply(reply_to, Ok(room))])
+        Error(_) -> #(state, [JoinReply(reply_to, Error(NoSuchRoom))])
       }
-    Move(player, dir) ->
-      case dict.get(state.members, player) {
-        Ok(member) -> {
-          case resolve_direction(state.rooms, member.at, dir) {
-            Ok(#(from_room, to_room)) -> {
-              let actions = [
-                LeaveRoom(player, from_room.process_name),
-                DescribeRoom(
-                  member.session,
-                  to_room.name,
-                  to_room.description,
-                  dict.keys(to_room.exits),
-                ),
-                EnterRoom(member.session, to_room.process_name),
-              ]
-              let new_state =
-                State(
-                  ..state,
-                  members: dict.insert(
-                    state.members,
-                    player,
-                    Member(member.session, to_room.id),
-                  ),
-                )
-              #(new_state, actions)
-            }
-            Error(_) -> #(state, [])
-          }
-        }
-        _ -> #(state, [])
-      }
-    Leave(player) ->
-      case dict.get(state.members, player) {
-        Ok(member) -> {
-          let actions = case dict.get(state.rooms, member.at) {
-            Ok(room) -> [
-              LeaveRoom(player, room.process_name),
-            ]
-            Error(_) -> []
-          }
-          let new_state =
-            State(..state, members: dict.delete(state.members, player))
-          #(new_state, actions)
-        }
-        Error(_) -> #(state, [])
-      }
-    PlayerSays(player, text) ->
-      case dict.get(state.members, player) {
-        Ok(member) ->
-          case dict.get(state.rooms, member.at) {
-            Ok(room) -> #(state, [
-              Say(player, room.process_name, text),
-            ])
-            Error(_) -> #(state, [])
-          }
-        Error(_) -> #(state, [])
-      }
-    Look(player) ->
-      case dict.get(state.members, player) {
-        Ok(member) ->
-          case dict.get(state.rooms, member.at) {
-            Ok(room) -> #(state, [
-              DescribeRoom(
-                session: member.session,
-                room_name: room.name,
-                room_description: room.description,
-                exits: dict.keys(room.exits),
-              ),
-            ])
-            Error(_) -> #(state, [
-              DescribeRoom(
-                session: member.session,
-                room_name: "a nonexisting room",
-                room_description: "An empty void.",
-                exits: [],
-              ),
-            ])
-          }
-        Error(_) -> #(state, [])
+    Move(from, dir, reply_to) ->
+      case resolve_direction(state.rooms, from, dir) {
+        Ok(to_room) -> #(state, [MoveReply(reply_to, Ok(to_room))])
+        Error(error) -> #(state, [MoveReply(reply_to, Error(error))])
       }
   }
 }
@@ -184,18 +77,18 @@ fn resolve_direction(
   rooms: Dict(RoomId, RoomInfo),
   at: RoomId,
   dir: Direction,
-) -> Result(#(RoomInfo, RoomInfo), Nil) {
+) -> Result(RoomInfo, MoveError) {
   case dict.get(rooms, at) {
     Ok(from_room) ->
       case dict.get(from_room.exits, dir) {
         Ok(to) ->
           case dict.get(rooms, to) {
-            Ok(to_room) -> Ok(#(from_room, to_room))
-            Error(_) -> Error(Nil)
+            Ok(to_room) -> Ok(to_room)
+            Error(_) -> Error(NonExistingRoom)
           }
-        Error(_) -> Error(Nil)
+        Error(_) -> Error(NonExistingExit)
       }
-    Error(_) -> Error(Nil)
+    Error(_) -> Error(NonExistingRoom)
   }
 }
 
@@ -203,16 +96,8 @@ fn resolve_direction(
 
 fn run(action: Action) -> Nil {
   case action {
-    DescribeRoom(session, room_name, room_description, exits) ->
-      session.listener.tell(event.YouAreIn(
-        room_name:,
-        room_description:,
-        exits:,
-      ))
-    EnterRoom(session, room) -> room.enter(room, session)
-    LeaveRoom(player, room) -> room.leave(room, player)
-    Say(player_id, room, text) -> room.say(room, player_id, text)
-    Reply(reply_to, result) -> actor.send(reply_to, result)
+    JoinReply(reply_to, result) -> actor.send(reply_to, result)
+    MoveReply(reply_to, result) -> actor.send(reply_to, result)
   }
 }
 
@@ -229,24 +114,15 @@ pub fn handle_message(
 
 pub fn join(
   world: Subject(Message),
-  session: event.Session,
   at: RoomId,
-) -> Result(Nil, JoinError) {
-  actor.call(world, 1000, Join(session:, at:, reply_to: _))
+) -> Result(RoomInfo, JoinError) {
+  actor.call(world, 1000, Join(at:, reply_to: _))
 }
 
-pub fn move(world: Subject(Message), player: PlayerId, dir: Direction) -> Nil {
-  actor.send(world, Move(player:, dir:))
-}
-
-pub fn say(world: Subject(Message), player: PlayerId, text: String) -> Nil {
-  actor.send(world, PlayerSays(player:, text:))
-}
-
-pub fn leave(world: Subject(Message), player: PlayerId) -> Nil {
-  actor.send(world, Leave(player:))
-}
-
-pub fn look(world: Subject(Message), player: PlayerId) -> Nil {
-  actor.send(world, Look(player))
+pub fn move(
+  world: Subject(Message),
+  from: RoomId,
+  dir: Direction,
+) -> Result(RoomInfo, MoveError) {
+  actor.call(world, 1000, Move(from:, dir:, reply_to: _))
 }

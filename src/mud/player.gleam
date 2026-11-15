@@ -11,7 +11,12 @@ import mud/world
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  State(id: PlayerId, name: String, world: Subject(world.Message))
+  State(
+    id: PlayerId,
+    name: String,
+    world: Subject(world.Message),
+    room: world.RoomInfo,
+  )
 }
 
 // ----- Message ----------------------------------------------------------
