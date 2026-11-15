@@ -158,7 +158,10 @@ fn run_effect(
     }
     player.Unknown(line), Some(conn), _ ->
       case
-        glisten.send(conn, bytes_tree.from_string("Unknown command: " <> line))
+        glisten.send(
+          conn,
+          bytes_tree.from_string("Unknown command: " <> line <> "\n"),
+        )
       {
         Ok(_) -> Ok(state)
         Error(e) -> Error(SendFailed(e))
