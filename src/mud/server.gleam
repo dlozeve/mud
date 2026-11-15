@@ -112,10 +112,20 @@ fn run_effect(
       room.say(player.room.process_name, player.id, line)
       Ok(state)
     }
-    player.Move(dir), _, Some(player) -> {
-      world.move(state.world, player.room.id, dir, state.replies)
-      Ok(state)
-    }
+    player.Move(dir), Some(conn), Some(player) ->
+      case world.move(state.world, player.room.id, dir, state.replies) {
+        Ok(_) -> Ok(state)
+        Error(_) ->
+          case
+            glisten.send(
+              conn,
+              bytes_tree.from_string("The world is restarting, try again.\n"),
+            )
+          {
+            Ok(_) -> Ok(state)
+            Error(e) -> Error(SendFailed(e))
+          }
+      }
     player.Look, _, Some(player) -> {
       room.look(player.room.process_name, player.id)
       Ok(state)

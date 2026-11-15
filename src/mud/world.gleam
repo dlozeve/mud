@@ -124,10 +124,11 @@ pub fn move(
   from: RoomId,
   dir: Direction,
   reply_to: Subject(Reply),
-) -> Nil {
+) -> Result(Nil, Nil) {
   case process.named(world) {
     Ok(_pid) ->
       actor.send(process.named_subject(world), Move(from:, dir:, reply_to:))
-    Error(_) -> Nil
+      |> Ok
+    Error(_) -> Error(Nil)
   }
 }
