@@ -27,6 +27,7 @@ pub type Def {
 pub type Message {
   Enter(session: event.Session)
   Leave(player: PlayerId)
+  Look(player: PlayerId)
   Say(speaker: PlayerId, text: String)
 }
 
@@ -45,12 +46,21 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
         Ok(_) -> #(state, [])
         Error(_) -> {
           let occupants = dict.insert(state.occupants, session.id, session)
-          let tells =
-            tell_others(
+          let tells = [
+            Tell(
+              session.id,
+              event.YouAreIn(
+                room_name: state.def.name,
+                room_description: state.def.description,
+                exits: dict.keys(state.def.exits),
+              ),
+            ),
+            ..tell_others(
               occupants,
               session.id,
               event.PlayerArrived(session.name),
             )
+          ]
           #(State(..state, occupants:), tells)
         }
       }
@@ -65,6 +75,22 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
         Error(_) -> #(state, [])
       }
     }
+    Look(player) ->
+      case dict.get(state.occupants, player) {
+        Ok(session) -> {
+          let tell =
+            Tell(
+              session.id,
+              event.YouAreIn(
+                room_name: state.def.name,
+                room_description: state.def.description,
+                exits: dict.keys(state.def.exits),
+              ),
+            )
+          #(state, [tell])
+        }
+        Error(_) -> #(state, [])
+      }
     Say(speaker, text) -> {
       case dict.get(state.occupants, speaker) {
         Ok(session) -> {
@@ -134,6 +160,10 @@ pub fn enter(room: process.Name(Message), session: event.Session) -> Nil {
 
 pub fn leave(room: process.Name(Message), player: PlayerId) -> Nil {
   actor.send(process.named_subject(room), Leave(player:))
+}
+
+pub fn look(room: process.Name(Message), player: PlayerId) -> Nil {
+  actor.send(process.named_subject(room), Look(player:))
 }
 
 pub fn say(

@@ -1,5 +1,4 @@
 import gleam/bytes_tree
-import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option, None, Some}
 import gleam/otp/static_supervisor
@@ -7,7 +6,6 @@ import gleam/otp/supervision
 import glisten.{type Connection}
 import glisten/socket
 import glisten/socket/options
-import mud/event
 import mud/id.{type RoomId}
 import mud/player
 import mud/room
@@ -93,14 +91,8 @@ fn run_effects(
                 to_room.process_name,
                 player.to_session(state.subject, player),
               )
-              run_effects(
-                session.State(..state, status: session.InGame(player)),
-                conn,
-                [
-                  session.Do(player.Output(player.render(describe(to_room)))),
-                  ..rest
-                ],
-              )
+              room.look(to_room.process_name, player.id)
+              Ok(session.State(..state, status: session.InGame(player)))
             }
             session.AwaitingName -> Error(Unexpected)
             session.InGame(_) -> Error(Unexpected)
@@ -144,33 +136,15 @@ fn run_effect(
             to_room.process_name,
             player.to_session(state.subject, player),
           )
-          let new_state =
-            with_player(state, fn(p) { player.State(..p, room: to_room) })
-          case
-            run_effect(
-              new_state,
-              conn,
-              player.Output(player.render(describe(to_room))),
-            )
-          {
-            Ok(_) -> Ok(new_state)
-            Error(e) -> Error(e)
-          }
+          room.look(player.room.process_name, player.id)
+          Ok(with_player(state, fn(p) { player.State(..p, room: to_room) }))
         }
         // TODO: tell the player that they couldn't move
         Error(_) -> Ok(state)
       }
-    player.Look, Some(conn), Some(player) -> {
-      // TODO replace by a proper room.look function
-      let send_result =
-        glisten.send(
-          conn,
-          bytes_tree.from_string(player.render(describe(player.room))),
-        )
-      case send_result {
-        Ok(_) -> Ok(state)
-        Error(e) -> Error(SendFailed(e))
-      }
+    player.Look, _, Some(player) -> {
+      room.look(player.room.process_name, player.id)
+      Ok(state)
     }
     player.Leave, _, Some(player) -> {
       room.leave(player.room.process_name, player.id)
@@ -185,14 +159,6 @@ fn run_effect(
       }
     _, _, _ -> Error(Unexpected)
   }
-}
-
-fn describe(room: room.Def) -> event.RoomEvent {
-  event.YouAreIn(
-    room_name: room.name,
-    room_description: room.description,
-    exits: dict.keys(room.exits),
-  )
 }
 
 fn current_player(state: session.State) -> Option(player.State) {

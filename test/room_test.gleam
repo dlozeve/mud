@@ -46,12 +46,24 @@ pub fn enter_broadcast_test() {
   let bob = session_with("Bob")
   let carol = session_with("Carol")
   let state = state_with([alice, bob])
-  let #(_state, actions) = room.decide(state, room.Enter(carol))
+  let #(new_state, actions) = room.decide(state, room.Enter(carol))
   assert set.from_list(actions)
     == set.from_list([
+      room.Tell(
+        carol.id,
+        event.YouAreIn(
+          room_name: state.def.name,
+          room_description: state.def.description,
+          exits: dict.keys(state.def.exits),
+        ),
+      ),
       room.Tell(alice.id, event.PlayerArrived(carol.name)),
       room.Tell(bob.id, event.PlayerArrived(carol.name)),
     ])
+  assert dict.size(new_state.occupants) == 3
+  assert dict.get(new_state.occupants, alice.id) == Ok(alice)
+  assert dict.get(new_state.occupants, bob.id) == Ok(bob)
+  assert dict.get(new_state.occupants, carol.id) == Ok(carol)
 }
 
 pub fn leave_broadcast_test() {
