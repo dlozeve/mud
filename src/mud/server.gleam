@@ -1,5 +1,5 @@
 import gleam/bytes_tree
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process
 import gleam/option.{type Option, None, Some}
 import gleam/otp/static_supervisor
 import gleam/otp/supervision
@@ -13,7 +13,7 @@ import mud/session
 import mud/world
 
 pub fn server_child(
-  world: Subject(world.Message),
+  world: process.Name(world.Message),
   entrance: RoomId,
   port: Int,
 ) -> supervision.ChildSpecification(static_supervisor.Supervisor) {
@@ -24,7 +24,7 @@ pub fn server_child(
   |> glisten.supervised(port)
 }
 
-pub fn on_init(world: Subject(world.Message), entrance: RoomId) {
+pub fn on_init(world: process.Name(world.Message), entrance: RoomId) {
   fn(conn: Connection(player.Message)) -> #(
     session.State,
     Option(process.Selector(player.Message)),

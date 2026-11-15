@@ -60,7 +60,7 @@ fn state() -> player.State {
   player.State(
     id: id.new_player_id("alice"),
     name: "Alice",
-    world: process.new_subject(),
+    world: process.new_name("world"),
     room: room(),
   )
 }

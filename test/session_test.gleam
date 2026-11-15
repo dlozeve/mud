@@ -49,7 +49,7 @@ fn state_with(status: session.Status) -> session.State {
   session.State(
     subject: process.new_subject(),
     replies: process.new_subject(),
-    world: process.new_subject(),
+    world: process.new_name("world"),
     entrance: id.new_room_id("entrance"),
     status: status,
     buffer: <<>>,
@@ -69,7 +69,7 @@ fn in_game_state() -> session.State {
     player.State(
       id: id.new_player_id("alice"),
       name: "Alice",
-      world: process.new_subject(),
+      world: process.new_name("world"),
       room: room_info("a room"),
     )
   state_with(session.InGame(player_state))
@@ -85,7 +85,7 @@ fn effects(r: #(session.State, List(session.Effect))) -> List(session.Effect) {
 pub fn started_test() {
   let subject = process.new_subject()
   let replies = process.new_subject()
-  let world = process.new_subject()
+  let world = process.new_name("world")
   let entrance = id.new_room_id("entrance")
   let #(state, effects) = session.started(subject, replies, world, entrance)
   assert effects

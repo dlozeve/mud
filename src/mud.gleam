@@ -69,11 +69,7 @@ pub fn main() -> Nil {
     |> static_supervisor.add(entrance_child)
     |> static_supervisor.add(corridor_child)
     |> static_supervisor.add(world_child)
-    |> static_supervisor.add(server.server_child(
-      process.named_subject(world_name),
-      entrance.id,
-      3000,
-    ))
+    |> static_supervisor.add(server.server_child(world_name, entrance.id, 3000))
     |> static_supervisor.start
 
   case supervisor {

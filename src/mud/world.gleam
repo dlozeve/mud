@@ -107,19 +107,27 @@ pub fn handle_message(
 // ------ Public helpers --------------------------------------------------
 
 pub fn join(
-  world: Subject(Message),
+  world: process.Name(Message),
   player: PlayerId,
   at: RoomId,
   reply_to: Subject(Reply),
 ) -> Nil {
-  actor.send(world, Join(player:, at:, reply_to:))
+  case process.named(world) {
+    Ok(_pid) ->
+      actor.send(process.named_subject(world), Join(player:, at:, reply_to:))
+    Error(_) -> Nil
+  }
 }
 
 pub fn move(
-  world: Subject(Message),
+  world: process.Name(Message),
   from: RoomId,
   dir: Direction,
   reply_to: Subject(Reply),
 ) -> Nil {
-  actor.send(world, Move(from:, dir:, reply_to:))
+  case process.named(world) {
+    Ok(_pid) ->
+      actor.send(process.named_subject(world), Move(from:, dir:, reply_to:))
+    Error(_) -> Nil
+  }
 }

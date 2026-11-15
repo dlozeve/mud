@@ -13,7 +13,7 @@ pub type State {
   State(
     subject: Subject(player.Message),
     replies: Subject(world.Reply),
-    world: Subject(world.Message),
+    world: process.Name(world.Message),
     entrance: RoomId,
     status: Status,
     buffer: BitArray,
@@ -39,7 +39,7 @@ pub type Effect {
 pub fn started(
   subject: Subject(player.Message),
   replies: Subject(world.Reply),
-  world: Subject(world.Message),
+  world: process.Name(world.Message),
   entrance: RoomId,
 ) -> #(State, List(Effect)) {
   let state =

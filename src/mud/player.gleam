@@ -15,7 +15,7 @@ pub type State {
   State(
     id: PlayerId,
     name: String,
-    world: Subject(world.Message),
+    world: process.Name(world.Message),
     room: room.Def,
   )
 }
