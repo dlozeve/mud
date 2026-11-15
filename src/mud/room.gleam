@@ -154,22 +154,41 @@ pub fn handle_message(
 
 // ------ Public helpers --------------------------------------------------
 
-pub fn enter(room: process.Name(Message), session: event.Session) -> Nil {
-  actor.send(process.named_subject(room), Enter(session))
+fn checked_named_subject(name: process.Name(a)) -> Result(Subject(a), Nil) {
+  case process.named(name) {
+    Ok(_pid) -> Ok(process.named_subject(name))
+    Error(_) -> Error(Nil)
+  }
 }
 
-pub fn leave(room: process.Name(Message), player: PlayerId) -> Nil {
-  actor.send(process.named_subject(room), Leave(player:))
+pub fn enter(room_name: process.Name(Message), session: event.Session) -> Nil {
+  case checked_named_subject(room_name) {
+    Ok(subject) -> actor.send(subject, Enter(session))
+    Error(_) -> Nil
+  }
 }
 
-pub fn look(room: process.Name(Message), player: PlayerId) -> Nil {
-  actor.send(process.named_subject(room), Look(player:))
+pub fn leave(room_name: process.Name(Message), player: PlayerId) -> Nil {
+  case checked_named_subject(room_name) {
+    Ok(subject) -> actor.send(subject, Leave(player:))
+    Error(_) -> Nil
+  }
+}
+
+pub fn look(room_name: process.Name(Message), player: PlayerId) -> Nil {
+  case checked_named_subject(room_name) {
+    Ok(subject) -> actor.send(subject, Look(player:))
+    Error(_) -> Nil
+  }
 }
 
 pub fn say(
-  room: process.Name(Message),
+  room_name: process.Name(Message),
   speaker: PlayerId,
   text: String,
 ) -> Nil {
-  actor.send(process.named_subject(room), Say(speaker:, text:))
+  case checked_named_subject(room_name) {
+    Ok(subject) -> actor.send(subject, Say(speaker:, text:))
+    Error(_) -> Nil
+  }
 }
