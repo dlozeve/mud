@@ -215,7 +215,7 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
     world.Joined(Ok(room)) ->
       case state.status {
         Joining(id:, name:) -> {
-          let player_state = player.State(id:, name:, room:, world: state.world)
+          let player_state = player.State(id:, name:, room:)
           #(State(..state, status: InGame(player_state)), [
             EnterRoom(room, attempt: 0),
           ])

@@ -96,12 +96,7 @@ fn in_game_state() -> session.State {
 fn in_room_state(room: room.Def) -> session.State {
   let world_name = process.new_name("world")
   let player_state =
-    player.State(
-      id: id.new_player_id("alice"),
-      name: "Alice",
-      world: world_name,
-      room: room,
-    )
+    player.State(id: id.new_player_id("alice"), name: "Alice", room: room)
   state_with_world(world_name, session.InGame(player_state))
 }
 
@@ -271,7 +266,6 @@ pub fn join_reply_starts_the_game_test() {
     == session.InGame(player.State(
       id: id.new_player_id("alice"),
       name: "Alice",
-      world: state.world,
       room: entrance,
     ))
 }
@@ -358,7 +352,6 @@ pub fn move_reply_relocates_the_player_test() {
     == session.InGame(player.State(
       id: id.new_player_id("alice"),
       name: "Alice",
-      world: state.world,
       room: corridor,
     ))
 }

@@ -1,4 +1,3 @@
-import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/string
@@ -7,17 +6,11 @@ import mud/direction.{type Direction}
 import mud/event.{type RoomEvent}
 import mud/id.{type PlayerId}
 import mud/room
-import mud/world
 
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  State(
-    id: PlayerId,
-    name: String,
-    world: process.Name(world.Message),
-    room: room.Def,
-  )
+  State(id: PlayerId, name: String, room: room.Def)
 }
 
 // ----- Action -----------------------------------------------------------

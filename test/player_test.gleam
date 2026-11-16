@@ -57,12 +57,7 @@ fn room() -> room.Def {
 }
 
 fn state() -> player.State {
-  player.State(
-    id: id.new_player_id("alice"),
-    name: "Alice",
-    world: process.new_name("world"),
-    room: room(),
-  )
+  player.State(id: id.new_player_id("alice"), name: "Alice", room: room())
 }
 
 pub fn decide_event_renders_to_output_test() {
