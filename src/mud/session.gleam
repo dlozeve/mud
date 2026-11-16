@@ -98,7 +98,9 @@ const max_enter_attempts = 10
 pub fn receive_bytes(state: State, chunk: BitArray) -> #(State, List(Effect)) {
   let #(buffer, lines) = take_lines(state.buffer, chunk)
   let state = State(..state, buffer:)
-  case bit_array.byte_size(buffer) > max_line {
+  case
+    bit_array.byte_size(state.buffer) + bit_array.byte_size(buffer) > max_line
+  {
     True -> #(state, [Do(player.Output("Line too long.")), Stop])
     False ->
       // effects after Stop are ignored
