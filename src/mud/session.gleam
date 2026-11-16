@@ -83,11 +83,7 @@ pub fn closed(state: State) -> List(Effect) {
   case state.status {
     AwaitingName -> []
     Joining(_, _) -> []
-    InGame(_) ->
-      case state.status {
-        InGame(player_state) -> [LeaveRoom(player_state.room.process_name)]
-        _ -> []
-      }
+    InGame(player_state) -> [LeaveRoom(player_state.room.process_name)]
   }
 }
 
