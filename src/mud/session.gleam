@@ -134,8 +134,9 @@ fn handle_line(state: State, line: String) -> #(State, List(Effect)) {
           Stop,
         ])
         parsed -> {
-          let #(_, actions) = player.decide_command(player_state, parsed)
-          #(state, list.map(actions, Do))
+          let #(player_state, actions) =
+            player.decide_command(player_state, parsed)
+          #(State(..state, status: InGame(player_state)), list.map(actions, Do))
         }
       }
   }
@@ -171,8 +172,8 @@ pub fn receive_message(
     RoomMessage(room_id, room_event) ->
       case state.status {
         InGame(player_state) if player_state.room.id == room_id -> {
-          let #(_, actions) = player.decide(player_state, room_event)
-          #(state, list.map(actions, Do))
+          let #(player_state, actions) = player.decide(player_state, room_event)
+          #(State(..state, status: InGame(player_state)), list.map(actions, Do))
         }
         // Message from a stale room that has not updated its occupancy, ignored.
         InGame(_) -> #(state, [])
