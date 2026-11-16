@@ -2,6 +2,7 @@ import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/io
 import gleam/list
+import gleam/option.{None, Some}
 import gleam/otp/actor
 import gleam/otp/static_supervisor
 import gleam/otp/supervision
@@ -16,7 +17,22 @@ fn room_child(
 ) -> supervision.ChildSpecification(Subject(room.Message)) {
   let state = room.State(def:, occupants: dict.new())
   supervision.worker(fn() {
-    actor.new(state)
+    actor.new_with_initialiser(1000, fn(subject) {
+      let selector =
+        process.new_selector()
+        |> process.select(subject)
+        |> process.select_monitors(fn(down) {
+          case down {
+            process.ProcessDown(_, pid, _) -> room.Down(Some(pid))
+            // unreachable
+            process.PortDown(..) -> room.Down(None)
+          }
+        })
+      actor.initialised(state)
+      |> actor.selecting(selector)
+      |> actor.returning(subject)
+      |> Ok
+    })
     |> actor.on_message(room.handle_message)
     |> actor.named(def.process_name)
     |> actor.start
@@ -28,9 +44,24 @@ fn world_child(
   rooms: List(room.Def),
 ) -> supervision.ChildSpecification(Subject(world.Message)) {
   let rooms = dict.from_list(list.map(rooms, fn(r) { #(r.id, r) }))
-  let state = world.State(rooms:)
+  let state = world.State(rooms:, players: dict.new())
   supervision.worker(fn() {
-    actor.new(state)
+    actor.new_with_initialiser(1000, fn(subject) {
+      let selector =
+        process.new_selector()
+        |> process.select(subject)
+        |> process.select_monitors(fn(down) {
+          case down {
+            process.ProcessDown(_, pid, _) -> world.Down(Some(pid))
+            // unreachable
+            process.PortDown(..) -> world.Down(None)
+          }
+        })
+      actor.initialised(state)
+      |> actor.selecting(selector)
+      |> actor.returning(subject)
+      |> Ok
+    })
     |> actor.on_message(world.handle_message)
     |> actor.named(name)
     |> actor.start

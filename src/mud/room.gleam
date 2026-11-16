@@ -1,6 +1,7 @@
 import gleam/dict.{type Dict}
 import gleam/erlang/process
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import mud/direction.{type Direction}
 import mud/event
@@ -29,12 +30,14 @@ pub type Message {
   Leave(player: PlayerId)
   Look(player: PlayerId)
   Say(speaker: PlayerId, text: String)
+  Down(pid: Option(process.Pid))
 }
 
 // ----- Action -----------------------------------------------------------
 
 pub type Action {
   Tell(player: PlayerId, room_event: event.RoomEvent)
+  Monitor(pid: process.Pid)
 }
 
 // ----- Logic ------------------------------------------------------------
@@ -46,7 +49,8 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
         Ok(_) -> #(state, [])
         Error(_) -> {
           let occupants = dict.insert(state.occupants, session.id, session)
-          let tells = [
+          let actions = [
+            Monitor(session.pid),
             Tell(
               session.id,
               event.YouAreIn(
@@ -61,7 +65,7 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
               event.PlayerArrived(session.name),
             )
           ]
-          #(State(..state, occupants:), tells)
+          #(State(..state, occupants:), actions)
         }
       }
     }
@@ -107,6 +111,14 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
         Error(_) -> #(state, [])
       }
     }
+    Down(Some(pid)) ->
+      case
+        dict.to_list(state.occupants) |> list.find(fn(e) { e.1.pid == pid })
+      {
+        Ok(#(player_id, _session)) -> decide(state, Leave(player_id))
+        Error(_) -> #(state, [])
+      }
+    Down(None) -> #(state, [])
   }
 }
 
@@ -139,6 +151,10 @@ fn run(action: Action, state: State) -> Nil {
         Ok(session) -> session.listener.tell(state.def.id, room_event)
         Error(_) -> Nil
       }
+    }
+    Monitor(pid) -> {
+      let _ = process.monitor(pid)
+      Nil
     }
   }
 }

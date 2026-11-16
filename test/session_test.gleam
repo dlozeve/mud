@@ -136,10 +136,14 @@ pub fn receive_bytes_while_joining_is_ignored_test() {
 
 pub fn join_failed_test() {
   let state = joining_state()
-  let #(new_state, effects) = session.join_failed(state, world.NameTaken)
+  let #(new_state, effects) = session.join_failed(state, world.AlreadyLoggedIn)
   assert new_state.status == session.AwaitingName
   assert effects
-    == [session.Do(player.Output("Name taken. Choose another name: "))]
+    == [
+      session.Do(player.Output(
+        "This name is already in use. Choose another name: ",
+      )),
+    ]
 }
 
 // ----- In game ----------------------------------------------------------
@@ -266,11 +270,15 @@ pub fn join_name_taken_test() {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      session.WorldMessage(world.Joined(Error(world.NameTaken))),
+      session.WorldMessage(world.Joined(Error(world.AlreadyLoggedIn))),
     )
 
   assert effects
-    == [session.Do(player.Output("Name taken. Choose another name: "))]
+    == [
+      session.Do(player.Output(
+        "This name is already in use. Choose another name: ",
+      )),
+    ]
   assert new_state.status == session.AwaitingName
 }
 

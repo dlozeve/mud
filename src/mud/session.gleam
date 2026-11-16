@@ -153,7 +153,8 @@ pub fn join_failed(
 ) -> #(State, List(Effect)) {
   let msg = case error {
     world.NoSuchRoom -> "This room does not exist."
-    world.NameTaken -> "Name taken. Choose another name: "
+    world.AlreadyLoggedIn ->
+      "This name is already in use. Choose another name: "
   }
   #(State(..state, status: AwaitingName), [Do(player.Output(msg))])
 }
@@ -294,5 +295,10 @@ pub fn to_session(
   player: Subject(Message),
   player_state: player.State,
 ) -> event.Session {
-  event.Session(player_state.id, player_state.name, to_listener(player))
+  event.Session(
+    player_state.id,
+    player_state.name,
+    process.self(),
+    to_listener(player),
+  )
 }

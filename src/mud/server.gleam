@@ -89,7 +89,13 @@ fn run_effects(
     [session.Join(to_room_id), ..rest] ->
       case state.status {
         session.Joining(player_id, _player_name) -> {
-          world.join(state.world, player_id, to_room_id, state.replies)
+          world.join(
+            state.world,
+            player_id,
+            process.self(),
+            to_room_id,
+            state.replies,
+          )
           let _ = process.send_after(state.subject, 5000, session.JoinTimeout)
           run_effects(state, conn, rest)
         }

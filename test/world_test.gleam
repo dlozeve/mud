@@ -1,6 +1,7 @@
 import gleam/dict.{type Dict}
 import gleam/erlang/process
 import gleam/list
+import gleam/option.{None, Some}
 import mud/direction.{type Direction}
 import mud/id.{type RoomId}
 import mud/room
@@ -32,7 +33,10 @@ fn rooms() {
 }
 
 fn state_with(rooms: List(room.Def)) -> world.State {
-  world.State(rooms: dict.from_list(list.map(rooms, fn(r) { #(r.id, r) })))
+  world.State(
+    rooms: dict.from_list(list.map(rooms, fn(r) { #(r.id, r) })),
+    players: dict.new(),
+  )
 }
 
 // ----- Join -------------------------------------------------------------
@@ -47,7 +51,12 @@ pub fn join_replies_with_the_room_test() {
   let #(new_state, actions) =
     world.decide(
       state,
-      world.Join(player: player_id, at: r1, reply_to: reply_to),
+      world.Join(
+        player: player_id,
+        pid: process.self(),
+        at: r1,
+        reply_to: reply_to,
+      ),
     )
 
   assert actions
@@ -57,8 +66,10 @@ pub fn join_replies_with_the_room_test() {
         reply_to: reply_to,
         result: world.Joined(Ok(entrance)),
       ),
+      world.Monitor(process.self()),
     ]
-  assert new_state == state
+  assert new_state.rooms == state.rooms
+  assert new_state.players == dict.from_list([#(player_id, process.self())])
 }
 
 pub fn join_unknown_room_test() {
@@ -72,7 +83,12 @@ pub fn join_unknown_room_test() {
   let #(new_state, actions) =
     world.decide(
       state,
-      world.Join(player: player_id, at: r2, reply_to: reply_to),
+      world.Join(
+        player: player_id,
+        pid: process.self(),
+        at: r2,
+        reply_to: reply_to,
+      ),
     )
 
   assert actions
@@ -83,6 +99,91 @@ pub fn join_unknown_room_test() {
         result: world.Joined(Error(world.NoSuchRoom)),
       ),
     ]
+  assert new_state == state
+}
+
+pub fn join_while_already_logged_in_test() {
+  let r1 = id.new_room_id("r1")
+  let entrance = room_with(r1, "entrance", dict.new())
+  let player_id = id.new_player_id("alice")
+  let other_pid = process.spawn(fn() { Nil })
+  let state =
+    world.State(
+      rooms: dict.from_list([#(r1, entrance)]),
+      players: dict.from_list([#(player_id, other_pid)]),
+    )
+  let reply_to = process.new_subject()
+
+  let #(new_state, actions) =
+    world.decide(
+      state,
+      world.Join(
+        player: player_id,
+        pid: process.self(),
+        at: r1,
+        reply_to: reply_to,
+      ),
+    )
+
+  assert actions
+    == [
+      world.JoinReply(
+        player: player_id,
+        reply_to: reply_to,
+        result: world.Joined(Error(world.AlreadyLoggedIn)),
+      ),
+    ]
+  // The existing session keeps the name.
+  assert new_state.players == dict.from_list([#(player_id, other_pid)])
+}
+
+// ----- Eviction ---------------------------------------------------------
+
+pub fn down_frees_the_name_test() {
+  let r1 = id.new_room_id("r1")
+  let entrance = room_with(r1, "entrance", dict.new())
+  let player_id = id.new_player_id("alice")
+  let dead_pid = process.spawn(fn() { Nil })
+  let state =
+    world.State(
+      rooms: dict.from_list([#(r1, entrance)]),
+      players: dict.from_list([#(player_id, dead_pid)]),
+    )
+
+  let #(new_state, actions) = world.decide(state, world.Down(Some(dead_pid)))
+
+  assert actions == []
+  assert new_state.players == dict.new()
+}
+
+pub fn down_of_an_unknown_process_is_ignored_test() {
+  let r1 = id.new_room_id("r1")
+  let entrance = room_with(r1, "entrance", dict.new())
+  let player_id = id.new_player_id("alice")
+  let state =
+    world.State(
+      rooms: dict.from_list([#(r1, entrance)]),
+      players: dict.from_list([#(player_id, process.self())]),
+    )
+
+  let #(new_state, _actions) =
+    world.decide(state, world.Down(Some(process.spawn(fn() { Nil }))))
+
+  assert new_state == state
+}
+
+pub fn down_of_none_is_ignored_test() {
+  let r1 = id.new_room_id("r1")
+  let entrance = room_with(r1, "entrance", dict.new())
+  let player_id = id.new_player_id("alice")
+  let state =
+    world.State(
+      rooms: dict.from_list([#(r1, entrance)]),
+      players: dict.from_list([#(player_id, process.self())]),
+    )
+
+  let #(new_state, _actions) = world.decide(state, world.Down(None))
+
   assert new_state == state
 }
 
@@ -183,6 +284,7 @@ pub fn sending_to_an_unregistered_world_is_dropped_test() {
   world.join(
     world_name,
     id.new_player_id("alice"),
+    process.self(),
     id.new_room_id("r1"),
     replies,
   )

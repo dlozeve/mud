@@ -1,3 +1,4 @@
+import gleam/erlang/process
 import mud/direction.{type Direction}
 import mud/id.{type PlayerId, type RoomId}
 
@@ -14,5 +15,5 @@ pub type Listener {
 }
 
 pub type Session {
-  Session(id: PlayerId, name: String, listener: Listener)
+  Session(id: PlayerId, name: String, pid: process.Pid, listener: Listener)
 }

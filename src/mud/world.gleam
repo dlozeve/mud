@@ -1,6 +1,7 @@
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import mud/direction.{type Direction}
 import mud/id.{type PlayerId, type RoomId}
@@ -9,14 +10,15 @@ import mud/room
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  State(rooms: Dict(RoomId, room.Def))
+  State(rooms: Dict(RoomId, room.Def), players: Dict(PlayerId, process.Pid))
 }
 
 // ----- Message ----------------------------------------------------------
 
 pub type Message {
-  Join(player: PlayerId, at: RoomId, reply_to: Subject(Reply))
+  Join(player: PlayerId, pid: process.Pid, at: RoomId, reply_to: Subject(Reply))
   Move(from: RoomId, dir: Direction, reply_to: Subject(Reply))
+  Down(pid: Option(process.Pid))
 }
 
 pub type Reply {
@@ -26,7 +28,7 @@ pub type Reply {
 
 pub type JoinError {
   NoSuchRoom
-  NameTaken
+  AlreadyLoggedIn
 }
 
 pub type MoveError {
@@ -39,19 +41,28 @@ pub type MoveError {
 pub type Action {
   JoinReply(player: PlayerId, reply_to: Subject(Reply), result: Reply)
   MoveReply(reply_to: Subject(Reply), result: Reply)
+  Monitor(pid: process.Pid)
 }
 
 // ----- Logic ------------------------------------------------------------
 
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
-    Join(player, at, reply_to) ->
-      // TODO: check that the name isn't already taken
-      case dict.get(state.rooms, at) {
-        Ok(room) -> #(state, [
-          JoinReply(player:, reply_to:, result: Joined(Ok(room))),
+    Join(player, pid, at, reply_to) ->
+      case dict.get(state.rooms, at), dict.get(state.players, player) {
+        Ok(room), Error(_) -> {
+          let new_state =
+            State(..state, players: dict.insert(state.players, player, pid))
+          let actions = [
+            JoinReply(player: player, reply_to:, result: Joined(Ok(room))),
+            Monitor(pid),
+          ]
+          #(new_state, actions)
+        }
+        _, Ok(_) -> #(state, [
+          JoinReply(player:, reply_to:, result: Joined(Error(AlreadyLoggedIn))),
         ])
-        Error(_) -> #(state, [
+        Error(_), _ -> #(state, [
           JoinReply(player:, reply_to:, result: Joined(Error(NoSuchRoom))),
         ])
       }
@@ -64,6 +75,11 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
           MoveReply(reply_to, Moved(from:, result: Error(error))),
         ])
       }
+    Down(Some(pid)) -> {
+      let players = dict.filter(state.players, fn(_, p) { p != pid })
+      #(State(..state, players:), [])
+    }
+    Down(None) -> #(state, [])
   }
 }
 
@@ -92,6 +108,10 @@ fn run(action: Action) -> Nil {
   case action {
     JoinReply(_player, reply_to, result) -> actor.send(reply_to, result)
     MoveReply(reply_to, result) -> actor.send(reply_to, result)
+    Monitor(pid) -> {
+      let _ = process.monitor(pid)
+      Nil
+    }
   }
 }
 
@@ -109,12 +129,16 @@ pub fn handle_message(
 pub fn join(
   world: process.Name(Message),
   player: PlayerId,
+  pid: process.Pid,
   at: RoomId,
   reply_to: Subject(Reply),
 ) -> Nil {
   case process.named(world) {
     Ok(_pid) ->
-      actor.send(process.named_subject(world), Join(player:, at:, reply_to:))
+      actor.send(
+        process.named_subject(world),
+        Join(player:, pid:, at:, reply_to:),
+      )
     Error(_) -> Nil
   }
 }
