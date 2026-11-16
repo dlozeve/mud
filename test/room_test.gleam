@@ -3,6 +3,7 @@ import gleam/erlang/process
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/set
+import mud/direction
 import mud/event
 import mud/id
 import mud/room
@@ -167,4 +168,36 @@ pub fn down_of_none_is_ignored_test() {
   let #(new_state, actions) = room.decide(state, room.Down(None))
   assert actions == []
   assert new_state == state
+}
+
+pub fn you_are_in_lists_exits_in_a_fixed_order_test() {
+  // Inserted West first, so a plain `dict.keys` would report West, North.
+  let def =
+    room.Def(
+      process_name: process.new_name("r1"),
+      id: id.new_room_id("r1"),
+      name: "room",
+      description: "room description",
+      exits: dict.from_list([
+        #(direction.West, id.new_room_id("west")),
+        #(direction.North, id.new_room_id("north")),
+      ]),
+    )
+  let state = room.State(def:, occupants: dict.new())
+  let alice = session_with("Alice")
+
+  let #(_state, actions) = room.decide(state, room.Enter(alice))
+
+  assert actions
+    == [
+      room.Monitor(alice.pid),
+      room.Tell(
+        alice.id,
+        event.YouAreIn(
+          room_name: "room",
+          room_description: "room description",
+          exits: [direction.North, direction.West],
+        ),
+      ),
+    ]
 }

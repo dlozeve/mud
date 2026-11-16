@@ -56,7 +56,9 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
               event.YouAreIn(
                 room_name: state.def.name,
                 room_description: state.def.description,
-                exits: dict.keys(state.def.exits),
+                exits: list.filter(direction.all(), fn(d) {
+                  dict.has_key(state.def.exits, d)
+                }),
               ),
             ),
             ..tell_others(
@@ -88,7 +90,9 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
               event.YouAreIn(
                 room_name: state.def.name,
                 room_description: state.def.description,
-                exits: dict.keys(state.def.exits),
+                exits: list.filter(direction.all(), fn(d) {
+                  dict.has_key(state.def.exits, d)
+                }),
               ),
             )
           #(state, [tell])
