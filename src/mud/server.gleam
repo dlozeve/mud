@@ -178,6 +178,16 @@ fn run_effect(
       room.look(player.room.process_name, player.id)
       Ok(state)
     }
+    player.BadDirection(dir), Some(conn), _ ->
+      case
+        glisten.send(
+          conn,
+          bytes_tree.from_string("Unknown direction: " <> dir <> "\n"),
+        )
+      {
+        Ok(_) -> Ok(state)
+        Error(e) -> Error(SendFailed(e))
+      }
     player.Unknown(line), Some(conn), _ ->
       case
         glisten.send(

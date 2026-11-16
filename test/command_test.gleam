@@ -34,8 +34,7 @@ pub fn go_test() {
 }
 
 pub fn go_unknown_direction_test() {
-  assert command.parse("go somewhere")
-    == command.Unknown("Unknown direction: somewhere")
+  assert command.parse("go somewhere") == command.BadDirection("somewhere")
 }
 
 pub fn go_no_direction_test() {

@@ -6,6 +6,7 @@ pub type Command {
   Go(Direction)
   Look
   Quit
+  BadDirection(String)
   Unknown(String)
 }
 
@@ -19,7 +20,7 @@ pub fn parse(line: String) -> Command {
         "go", [dir, ..] ->
           case parse_direction(dir) {
             Ok(dir) -> Go(dir)
-            Error(s) -> Unknown("Unknown direction: " <> s)
+            Error(s) -> BadDirection(s)
           }
         "go", _ -> Unknown(line)
         "look", _ -> Look
