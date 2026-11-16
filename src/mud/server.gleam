@@ -1,8 +1,10 @@
 import gleam/bytes_tree
 import gleam/erlang/process
+import gleam/io
 import gleam/option.{type Option, None, Some}
 import gleam/otp/static_supervisor
 import gleam/otp/supervision
+import gleam/string
 import glisten.{type Connection}
 import glisten/socket
 import glisten/socket/options
@@ -75,7 +77,6 @@ fn on_close(state: session.State) {
 type StopReason {
   SendFailed(socket.SocketReason)
   Requested
-  Unexpected
 }
 
 fn run_effects(
@@ -99,8 +100,11 @@ fn run_effects(
           let _ = process.send_after(state.subject, 5000, session.JoinTimeout)
           run_effects(state, conn, rest)
         }
-        session.AwaitingName -> Error(Unexpected)
-        session.InGame(_) -> Error(Unexpected)
+        // A join request is only meaningful while a name is being claimed.
+        session.AwaitingName | session.InGame(_) -> {
+          skip_effect("a join request outside the Joining state")
+          run_effects(state, conn, rest)
+        }
       }
     [session.EnterRoom(to_room, attempt), ..rest] ->
       case state.status, process.named(to_room.process_name) {
@@ -150,35 +154,67 @@ fn run_effect(
   conn: Option(Connection(session.Message)),
   action: player.Action,
 ) -> Result(session.State, StopReason) {
-  case action, conn, current_player(state) {
-    player.Output(text), Some(conn), _ ->
+  case action {
+    player.Output(text) -> write(state, conn, text)
+    player.Say(line) ->
+      with_player(state, action, fn(player) {
+        room.say(player.room.process_name, player.id, line)
+        Ok(state)
+      })
+    player.Move(dir) ->
+      with_player(state, action, fn(player) {
+        case world.move(state.world, player.room.id, dir, state.replies) {
+          Ok(_) -> Ok(state)
+          Error(_) -> write(state, conn, "The world is restarting, try again.")
+        }
+      })
+    player.Look ->
+      with_player(state, action, fn(player) {
+        room.look(player.room.process_name, player.id)
+        Ok(state)
+      })
+  }
+}
+
+fn with_player(
+  state: session.State,
+  action: player.Action,
+  perform: fn(player.State) -> Result(session.State, StopReason),
+) -> Result(session.State, StopReason) {
+  case current_player(state) {
+    Some(player) -> perform(player)
+    None -> skip_playerless_effect(state, action)
+  }
+}
+
+// An effect that needs a player was produced for a session that is not in the game.
+fn skip_playerless_effect(
+  state: session.State,
+  action: player.Action,
+) -> Result(session.State, StopReason) {
+  skip_effect(string.inspect(action) <> " with no player in the session")
+  Ok(state)
+}
+
+fn skip_effect(reason: String) -> Nil {
+  // TODO: replace with the `logging` package
+  io.println_error("skipping " <> reason)
+}
+
+fn write(
+  state: session.State,
+  conn: Option(Connection(session.Message)),
+  text: String,
+) -> Result(session.State, StopReason) {
+  case conn {
+    Some(conn) ->
       case glisten.send(conn, bytes_tree.from_string(text <> "\n")) {
         Ok(_) -> Ok(state)
         Error(e) -> Error(SendFailed(e))
       }
-    player.Say(line), _, Some(player) -> {
-      room.say(player.room.process_name, player.id, line)
-      Ok(state)
-    }
-    player.Move(dir), Some(conn), Some(player) ->
-      case world.move(state.world, player.room.id, dir, state.replies) {
-        Ok(_) -> Ok(state)
-        Error(_) ->
-          case
-            glisten.send(
-              conn,
-              bytes_tree.from_string("The world is restarting, try again.\n"),
-            )
-          {
-            Ok(_) -> Ok(state)
-            Error(e) -> Error(SendFailed(e))
-          }
-      }
-    player.Look, _, Some(player) -> {
-      room.look(player.room.process_name, player.id)
-      Ok(state)
-    }
-    _, _, _ -> Error(Unexpected)
+    // The client is gone (on_close): there is nobody left to write to, and that
+    // is not an error.
+    None -> Ok(state)
   }
 }
 
