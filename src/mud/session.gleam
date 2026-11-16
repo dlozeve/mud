@@ -2,6 +2,7 @@ import gleam/bit_array
 import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 import mud/command
 import mud/event.{type RoomEvent}
@@ -259,8 +260,7 @@ pub fn take_lines(
 ) -> #(BitArray, List(String)) {
   let bytes = bit_array.append(buffer, chunk)
   case bit_array.to_string(bytes) {
-    // Not valid UTF-8 yet: a character is split across chunks, keep waiting.
-    Error(_) -> #(bytes, [])
+    // Fast path: the whole buffer is valid UTF-8, so it can be split as text.
     Ok(text) -> {
       case string.split(text, "\n") {
         [] -> #(bytes, [])
@@ -273,6 +273,63 @@ pub fn take_lines(
         }
       }
     }
+    // Either the buffer ends in the middle of a multi-byte character, or a
+    // client sent bytes that are not UTF-8 at all. Decoding the whole buffer
+    // is impossible, so split it on the newline at the byte level instead:
+    // 0x0A can never appear inside a UTF-8 sequence, so this is safe and one
+    // bad line cannot hold back the ones after it.
+    Error(_) -> take_lines_bytewise(bytes)
+  }
+}
+
+fn take_lines_bytewise(bytes: BitArray) -> #(BitArray, List(String)) {
+  let size = bit_array.byte_size(bytes)
+  let #(chunks, rest_at) = split_chunks(bytes, size, 0, 0, [])
+  #(
+    slice_bytes(bytes, rest_at, size - rest_at),
+    list.filter_map(chunks, decode_line),
+  )
+}
+
+// Walk the bytes, cutting at every 0x0A. Returns the completed chunks (without
+// the newline) and the offset where the unterminated remainder starts.
+fn split_chunks(
+  bytes: BitArray,
+  size: Int,
+  start: Int,
+  at: Int,
+  chunks: List(BitArray),
+) -> #(List(BitArray), Int) {
+  case at >= size {
+    True -> #(list.reverse(chunks), start)
+    False ->
+      case is_newline(bytes, at) {
+        True ->
+          split_chunks(bytes, size, at + 1, at + 1, [
+            slice_bytes(bytes, start, at - start),
+            ..chunks
+          ])
+        False -> split_chunks(bytes, size, start, at + 1, chunks)
+      }
+  }
+}
+
+fn is_newline(bytes: BitArray, at: Int) -> Bool {
+  case bit_array.slice(bytes, at, 1) {
+    Ok(<<10>>) -> True
+    _ -> False
+  }
+}
+
+fn slice_bytes(bytes: BitArray, at: Int, length: Int) -> BitArray {
+  result.unwrap(bit_array.slice(bytes, at, length), <<>>)
+}
+
+fn decode_line(chunk: BitArray) -> Result(String, Nil) {
+  case bit_array.to_string(chunk) {
+    Ok(text) -> clean_line(text)
+    // A line that is not valid UTF-8 cannot be a command; drop it.
+    Error(_) -> Error(Nil)
   }
 }
 

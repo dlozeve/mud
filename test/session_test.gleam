@@ -26,6 +26,22 @@ pub fn take_lines_strip_cr_test() {
     == #(<<>>, ["look", "say hi"])
 }
 
+pub fn take_lines_invalid_utf8_does_not_block_later_lines_test() {
+  // The middle line is not valid UTF-8. It is dropped, but the lines around it
+  // must still be processed: one bad line cannot stall the connection.
+  assert session.take_lines(<<>>, <<"look\n", 255, "\nsay hi\n">>)
+    == #(<<>>, ["look", "say hi"])
+}
+
+pub fn take_lines_partial_character_at_the_end_does_not_block_later_lines_test() {
+  // 195 starts a two-byte character; the complete line before it is not held back.
+  assert session.take_lines(<<>>, <<"look\n", 195>>) == #(<<195>>, ["look"])
+}
+
+pub fn take_lines_split_character_is_buffered_test() {
+  assert session.take_lines(<<195>>, <<169>>) == #(<<195, 169>>, [])
+}
+
 pub fn take_lines_empty_test() {
   assert session.take_lines(<<>>, <<"\n\n">>) == #(<<>>, [])
 }
