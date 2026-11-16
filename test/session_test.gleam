@@ -174,6 +174,29 @@ pub fn receive_bytes_line_too_long_test() {
     == [session.Do(player.Output("Line too long.")), session.Stop]
 }
 
+pub fn receive_bytes_long_line_ending_with_newline_test() {
+  let state = in_game_state()
+  let line = string.repeat("a", times: 2000)
+  assert session.receive_bytes(state, bit_array.from_string(line <> "\n"))
+    |> effects
+    == [session.Do(player.Output("Line too long.")), session.Stop]
+}
+
+pub fn receive_bytes_incomplete_line_under_limit_is_buffered_test() {
+  let state = in_game_state()
+  let chunk = bit_array.from_string(string.repeat("a", times: 600))
+  let #(new_state, effects) = session.receive_bytes(state, chunk)
+  assert effects == []
+  assert bit_array.byte_size(new_state.buffer) == 600
+}
+
+pub fn receive_bytes_incomplete_line_over_limit_test() {
+  let state = in_game_state()
+  let chunk = bit_array.from_string(string.repeat("a", times: 1100))
+  assert session.receive_bytes(state, chunk) |> effects
+    == [session.Do(player.Output("Line too long.")), session.Stop]
+}
+
 pub fn receive_message_test() {
   let state = in_game_state()
   let assert session.InGame(player_state) = state.status

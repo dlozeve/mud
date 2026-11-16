@@ -99,7 +99,8 @@ pub fn receive_bytes(state: State, chunk: BitArray) -> #(State, List(Effect)) {
   let #(buffer, lines) = take_lines(state.buffer, chunk)
   let state = State(..state, buffer:)
   case
-    bit_array.byte_size(state.buffer) + bit_array.byte_size(buffer) > max_line
+    list.any(lines, fn(line) { string.byte_size(line) > max_line })
+    || bit_array.byte_size(buffer) > max_line
   {
     True -> #(state, [Do(player.Output("Line too long.")), Stop])
     False ->
