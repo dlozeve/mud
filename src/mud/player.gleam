@@ -27,8 +27,6 @@ pub type Action {
   Say(String)
   Move(Direction)
   Look
-  BadDirection(String)
-  Unknown(String)
 }
 
 // ----- Logic ------------------------------------------------------------
@@ -43,8 +41,8 @@ pub fn decide_command(
     command.Go(dir) -> #(state, [Move(dir)])
     command.Look -> #(state, [Look])
     command.Quit -> #(state, [])
-    command.BadDirection(dir) -> #(state, [BadDirection(dir)])
-    command.Unknown(line) -> #(state, [Unknown(line)])
+    command.BadDirection(dir) -> #(state, [Output("Unknown direction: " <> dir)])
+    command.Unknown(line) -> #(state, [Output("Unknown command: " <> line)])
   }
 }
 

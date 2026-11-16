@@ -179,7 +179,7 @@ pub fn receive_bytes_in_game_test() {
     == [session.Do(player.Move(direction.North))]
   assert session.receive_bytes(state, <<"something\n">>)
     |> effects
-    == [session.Do(player.Unknown("something"))]
+    == [session.Do(player.Output("Unknown command: something"))]
 }
 
 pub fn receive_bytes_line_too_long_test() {

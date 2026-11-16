@@ -81,10 +81,16 @@ pub fn decide_command_quit_test() {
   assert player.decide_command(s, command.Quit) == #(s, [])
 }
 
+pub fn decide_command_bad_direction_test() {
+  let s = state()
+  assert player.decide_command(s, command.BadDirection("somewhere"))
+    == #(s, [player.Output("Unknown direction: somewhere")])
+}
+
 pub fn decide_command_unknown_test() {
   let s = state()
   assert player.decide_command(s, command.Unknown("sing"))
-    == #(s, [player.Unknown("sing")])
+    == #(s, [player.Output("Unknown command: sing")])
 }
 
 // The player carries the room it is in, so these are pure lookups.
