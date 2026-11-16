@@ -1,11 +1,11 @@
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/string
 import mud/command.{type Command}
 import mud/direction.{type Direction}
 import mud/event.{type RoomEvent}
-import mud/id.{type PlayerId, type RoomId}
+import mud/id.{type PlayerId}
 import mud/room
 import mud/world
 
@@ -20,14 +20,6 @@ pub type State {
   )
 }
 
-// ----- Message ----------------------------------------------------------
-
-pub type Message {
-  RoomMessage(room: RoomId, event: RoomEvent)
-  WorldMessage(world.Reply)
-  JoinTimeout
-}
-
 // ----- Action -----------------------------------------------------------
 
 pub type Action {
@@ -35,9 +27,6 @@ pub type Action {
   Say(String)
   Move(Direction)
   Look
-  Leave
-  EnterRoom(room.Def)
-  LeaveRoom(process.Name(room.Message))
   Unknown(String)
 }
 
@@ -52,7 +41,7 @@ pub fn decide_command(
     command.Say(line) -> #(state, [Say(line)])
     command.Go(dir) -> #(state, [Move(dir)])
     command.Look -> #(state, [Look])
-    command.Quit -> #(state, [Leave])
+    command.Quit -> #(state, [])
     command.Unknown(line) -> #(state, [Unknown(line)])
   }
 }
@@ -95,16 +84,4 @@ fn describe_exits(exits: List(Direction)) -> String {
       <> "."
     }
   }
-}
-
-// ------ Public helpers --------------------------------------------------
-
-fn to_listener(player: Subject(Message)) -> event.Listener {
-  event.Listener(fn(room_id, room_event) {
-    process.send(player, RoomMessage(room_id, room_event))
-  })
-}
-
-pub fn to_session(player: Subject(Message), state: State) -> event.Session {
-  event.Session(state.id, state.name, to_listener(player))
 }

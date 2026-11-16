@@ -1,6 +1,7 @@
 import gleam/bit_array
 import gleam/dict
 import gleam/erlang/process
+import gleam/option.{None, Some}
 import gleam/string
 import mud/direction
 import mud/event
@@ -60,6 +61,7 @@ fn state_with_world(
     entrance: id.new_room_id("entrance"),
     status: status,
     buffer: <<>>,
+    room_watch: None,
   )
 }
 
@@ -144,10 +146,11 @@ pub fn join_failed_test() {
 
 pub fn receive_bytes_in_game_test() {
   let state = in_game_state()
+  let assert session.InGame(player_state) = state.status
   assert session.receive_bytes(state, <<"say hi\n">>) |> effects
     == [session.Do(player.Say("hi"))]
   assert session.receive_bytes(state, <<"quit\n">>) |> effects
-    == [session.Do(player.Leave), session.Stop]
+    == [session.LeaveRoom(player_state.room.process_name), session.Stop]
   assert session.receive_bytes(state, <<"look\n">>)
     |> effects
     == [session.Do(player.Look)]
@@ -172,7 +175,7 @@ pub fn receive_message_test() {
   let assert session.InGame(player_state) = state.status
   assert session.receive_message(
       state,
-      player.RoomMessage(player_state.room.id, event.YouSaid("hi")),
+      session.RoomMessage(player_state.room.id, event.YouSaid("hi")),
     )
     |> effects
     == [session.Do(player.Output("You say: hi"))]
@@ -182,7 +185,7 @@ pub fn receive_message_stale_room_test() {
   let state = in_game_state()
   assert session.receive_message(
       state,
-      player.RoomMessage(id.new_room_id("somewhere else"), event.YouSaid("hi")),
+      session.RoomMessage(id.new_room_id("somewhere else"), event.YouSaid("hi")),
     )
     |> effects
     == []
@@ -192,7 +195,7 @@ pub fn receive_message_in_awaiting_name_test() {
   let state = awaiting_name_state()
   assert session.receive_message(
       state,
-      player.RoomMessage(state.entrance, event.YouSaid("hi")),
+      session.RoomMessage(state.entrance, event.YouSaid("hi")),
     )
     |> effects
     == []
@@ -202,7 +205,7 @@ pub fn receive_message_in_joining_test() {
   let state = joining_state()
   assert session.receive_message(
       state,
-      player.RoomMessage(state.entrance, event.YouSaid("hi")),
+      session.RoomMessage(state.entrance, event.YouSaid("hi")),
     )
     |> effects
     == []
@@ -217,10 +220,10 @@ pub fn join_reply_starts_the_game_test() {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      player.WorldMessage(world.Joined(Ok(entrance))),
+      session.WorldMessage(world.Joined(Ok(entrance))),
     )
 
-  assert effects == [session.Do(player.EnterRoom(entrance))]
+  assert effects == [session.EnterRoom(entrance, 0)]
   assert new_state.status
     == session.InGame(player.State(
       id: id.new_player_id("alice"),
@@ -237,7 +240,7 @@ pub fn join_reply_when_already_in_game_is_ignored_test() {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      player.WorldMessage(world.Joined(Ok(corridor))),
+      session.WorldMessage(world.Joined(Ok(corridor))),
     )
 
   assert effects == []
@@ -250,7 +253,7 @@ pub fn join_error_returns_to_awaiting_name_test() {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      player.WorldMessage(world.Joined(Error(world.NoSuchRoom))),
+      session.WorldMessage(world.Joined(Error(world.NoSuchRoom))),
     )
 
   assert effects == [session.Do(player.Output("This room does not exist."))]
@@ -263,7 +266,7 @@ pub fn join_name_taken_test() {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      player.WorldMessage(world.Joined(Error(world.NameTaken))),
+      session.WorldMessage(world.Joined(Error(world.NameTaken))),
     )
 
   assert effects
@@ -277,7 +280,7 @@ pub fn join_error_when_already_in_game_is_ignored_test() {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      player.WorldMessage(world.Joined(Error(world.NoSuchRoom))),
+      session.WorldMessage(world.Joined(Error(world.NoSuchRoom))),
     )
 
   // A late error must not demote a player who is already in the game, or the
@@ -294,15 +297,15 @@ pub fn move_reply_relocates_the_player_test() {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      player.WorldMessage(world.Moved(entrance.id, Ok(corridor))),
+      session.WorldMessage(world.Moved(entrance.id, Ok(corridor))),
     )
 
   // The old room is named explicitly: by the time these effects run the player
   // already records the new room.
   assert effects
     == [
-      session.Do(player.LeaveRoom(entrance.process_name)),
-      session.Do(player.EnterRoom(corridor)),
+      session.LeaveRoom(entrance.process_name),
+      session.EnterRoom(corridor, 0),
     ]
   assert new_state.status
     == session.InGame(player.State(
@@ -322,7 +325,7 @@ pub fn move_reply_from_a_stale_room_is_ignored_test() {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      player.WorldMessage(world.Moved(entrance.id, Ok(elsewhere))),
+      session.WorldMessage(world.Moved(entrance.id, Ok(elsewhere))),
     )
 
   assert effects == []
@@ -336,7 +339,10 @@ pub fn move_error_test() {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      player.WorldMessage(world.Moved(entrance.id, Error(world.NonExistingExit))),
+      session.WorldMessage(world.Moved(
+        entrance.id,
+        Error(world.NonExistingExit),
+      )),
     )
 
   assert effects == [session.Do(player.Output("You can't go that way."))]
@@ -351,7 +357,10 @@ pub fn move_error_from_a_stale_room_is_ignored_test() {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      player.WorldMessage(world.Moved(entrance.id, Error(world.NonExistingExit))),
+      session.WorldMessage(world.Moved(
+        entrance.id,
+        Error(world.NonExistingExit),
+      )),
     )
 
   assert effects == []
@@ -361,7 +370,8 @@ pub fn move_error_from_a_stale_room_is_ignored_test() {
 pub fn join_timeout_returns_to_awaiting_name_test() {
   let state = joining_state()
 
-  let #(new_state, effects) = session.receive_message(state, player.JoinTimeout)
+  let #(new_state, effects) =
+    session.receive_message(state, session.JoinTimeout)
 
   assert effects
     == [session.Do(player.Output("The world is not answering, try again: "))]
@@ -370,7 +380,7 @@ pub fn join_timeout_returns_to_awaiting_name_test() {
 
 pub fn join_timeout_while_in_game_is_ignored_test() {
   let state = in_room_state(room_info("entrance"))
-  assert session.receive_message(state, player.JoinTimeout) |> effects == []
+  assert session.receive_message(state, session.JoinTimeout) |> effects == []
 }
 
 // Two moves in one packet are both dispatched from the room the player was in,
@@ -391,27 +401,107 @@ pub fn second_move_reply_in_the_same_packet_is_ignored_test() {
   let #(moved, first_effects) =
     session.receive_message(
       dispatched,
-      player.WorldMessage(world.Moved(entrance.id, Ok(corridor))),
+      session.WorldMessage(world.Moved(entrance.id, Ok(corridor))),
     )
   assert first_effects
     == [
-      session.Do(player.LeaveRoom(entrance.process_name)),
-      session.Do(player.EnterRoom(corridor)),
+      session.LeaveRoom(entrance.process_name),
+      session.EnterRoom(corridor, 0),
     ]
 
   let #(after, second_effects) =
     session.receive_message(
       moved,
-      player.WorldMessage(world.Moved(entrance.id, Ok(corridor))),
+      session.WorldMessage(world.Moved(entrance.id, Ok(corridor))),
     )
   assert second_effects == []
   assert after.status == moved.status
 }
 
+// ----- Room restart -----------------------------------------------------
+
+fn watched_state(room: room.Def, pid: process.Pid) -> session.State {
+  let state = in_room_state(room)
+  session.State(
+    ..state,
+    room_watch: Some(session.RoomWatch(pid, process.monitor(pid))),
+  )
+}
+
+pub fn room_down_reenters_the_current_room_test() {
+  let entrance = room_info("entrance")
+  let me = process.self()
+  let state = watched_state(entrance, me)
+
+  let #(new_state, effects) =
+    session.receive_message(state, session.RoomDown(Some(me)))
+
+  assert effects == [session.EnterRoom(entrance, 0)]
+  assert new_state.room_watch == None
+}
+
+pub fn room_down_from_a_room_we_have_left_is_ignored_test() {
+  let entrance = room_info("entrance")
+  let old_room = process.spawn(fn() { Nil })
+  let state = watched_state(entrance, process.self())
+
+  // A monitor of a room we already moved out of fires later and must not
+  // pull the player back into their current room.
+  let #(new_state, effects) =
+    session.receive_message(state, session.RoomDown(Some(old_room)))
+
+  assert effects == []
+  assert new_state.status == state.status
+}
+
+pub fn room_down_when_not_in_game_is_ignored_test() {
+  let state = joining_state()
+  assert session.receive_message(state, session.RoomDown(Some(process.self())))
+    |> effects
+    == []
+}
+
+pub fn retry_enter_reemits_enter_room_test() {
+  let entrance = room_info("entrance")
+  let state = in_room_state(entrance)
+
+  let #(_, effects) =
+    session.receive_message(state, session.RetryEnter(entrance, 1))
+
+  assert effects == [session.EnterRoom(entrance, 1)]
+}
+
+pub fn retry_enter_gives_up_after_max_attempts_test() {
+  let entrance = room_info("entrance")
+  let state = in_room_state(entrance)
+
+  let #(_, effects) =
+    session.receive_message(state, session.RetryEnter(entrance, 11))
+
+  assert effects
+    == [
+      session.Do(player.Output("The room is not available. Disconnecting.")),
+      session.Stop,
+    ]
+}
+
+pub fn retry_enter_when_not_in_game_is_ignored_test() {
+  let state = joining_state()
+  assert session.receive_message(
+      state,
+      session.RetryEnter(room_info("entrance"), 1),
+    )
+    |> effects
+    == []
+}
+
 // ----- Disconnecting ----------------------------------------------------
 
 pub fn closed_test() {
-  assert session.closed(in_game_state()) == [session.Do(player.Leave)]
+  let state = in_game_state()
+  let assert session.InGame(player_state) = state.status
+  assert session.closed(state)
+    == [session.LeaveRoom(player_state.room.process_name)]
 }
 
 pub fn closed_in_awaiting_name_test() {
@@ -420,4 +510,12 @@ pub fn closed_in_awaiting_name_test() {
 
 pub fn closed_in_joining_test() {
   assert session.closed(joining_state()) == []
+}
+
+pub fn to_session_test() {
+  let s = in_game_state()
+  let assert session.InGame(player_state) = s.status
+  let sess = session.to_session(process.new_subject(), player_state)
+  assert sess.id == player_state.id
+  assert sess.name == player_state.name
 }

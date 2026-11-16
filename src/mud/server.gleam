@@ -25,16 +25,23 @@ pub fn server_child(
 }
 
 pub fn on_init(world: process.Name(world.Message), entrance: RoomId) {
-  fn(conn: Connection(player.Message)) -> #(
+  fn(conn: Connection(session.Message)) -> #(
     session.State,
-    Option(process.Selector(player.Message)),
+    Option(process.Selector(session.Message)),
   ) {
     let subject = process.new_subject()
     let replies = process.new_subject()
     let selector =
       process.new_selector()
       |> process.select(subject)
-      |> process.select_map(replies, player.WorldMessage)
+      |> process.select_map(replies, session.WorldMessage)
+      |> process.select_monitors(fn(down) {
+        case down {
+          process.ProcessDown(_, pid, _) -> session.RoomDown(Some(pid))
+          // never happens, we don't monitor ports
+          process.PortDown(..) -> session.RoomDown(None)
+        }
+      })
     let #(state, effects) = session.started(subject, replies, world, entrance)
     case run_effects(state, Some(conn), effects) {
       Ok(state) -> #(state, Some(selector))
@@ -45,9 +52,9 @@ pub fn on_init(world: process.Name(world.Message), entrance: RoomId) {
 
 fn loop(
   state: session.State,
-  msg: glisten.Message(player.Message),
-  conn: Connection(player.Message),
-) -> glisten.Next(session.State, glisten.Message(player.Message)) {
+  msg: glisten.Message(session.Message),
+  conn: Connection(session.Message),
+) -> glisten.Next(session.State, glisten.Message(session.Message)) {
   let #(state, effects) = case msg {
     glisten.Packet(chunk) -> session.receive_bytes(state, chunk)
     glisten.User(user_message) -> session.receive_message(state, user_message)
@@ -73,7 +80,7 @@ type StopReason {
 
 fn run_effects(
   state: session.State,
-  conn: Option(Connection(player.Message)),
+  conn: Option(Connection(session.Message)),
   effects: List(session.Effect),
 ) -> Result(session.State, StopReason) {
   case effects {
@@ -83,11 +90,46 @@ fn run_effects(
       case state.status {
         session.Joining(player_id, _player_name) -> {
           world.join(state.world, player_id, to_room_id, state.replies)
-          let _ = process.send_after(state.subject, 5000, player.JoinTimeout)
+          let _ = process.send_after(state.subject, 5000, session.JoinTimeout)
           run_effects(state, conn, rest)
         }
         session.AwaitingName -> Error(Unexpected)
         session.InGame(_) -> Error(Unexpected)
+      }
+    [session.EnterRoom(to_room, attempt), ..rest] ->
+      case state.status, process.named(to_room.process_name) {
+        session.InGame(player), Ok(pid) -> {
+          case state.room_watch {
+            Some(session.RoomWatch(_pid, monitor)) ->
+              process.demonitor_process(monitor)
+            None -> Nil
+          }
+          room.enter(
+            to_room.process_name,
+            session.to_session(state.subject, player),
+          )
+          let room_watch =
+            Some(session.RoomWatch(pid: pid, monitor: process.monitor(pid)))
+          run_effects(session.State(..state, room_watch:), conn, rest)
+        }
+        session.InGame(_), Error(_) -> {
+          let _ =
+            process.send_after(
+              state.subject,
+              100,
+              session.RetryEnter(to_room, attempt + 1),
+            )
+          run_effects(state, conn, rest)
+        }
+        _, _ -> run_effects(state, conn, rest)
+      }
+    [session.LeaveRoom(room_name), ..rest] ->
+      case state.status {
+        session.InGame(player_state) -> {
+          room.leave(room_name, player_state.id)
+          run_effects(state, conn, rest)
+        }
+        _ -> run_effects(state, conn, rest)
       }
     [session.Do(action), ..rest] ->
       case run_effect(state, conn, action) {
@@ -99,7 +141,7 @@ fn run_effects(
 
 fn run_effect(
   state: session.State,
-  conn: Option(Connection(player.Message)),
+  conn: Option(Connection(session.Message)),
   action: player.Action,
 ) -> Result(session.State, StopReason) {
   case action, conn, current_player(state) {
@@ -128,18 +170,6 @@ fn run_effect(
       }
     player.Look, _, Some(player) -> {
       room.look(player.room.process_name, player.id)
-      Ok(state)
-    }
-    player.Leave, _, Some(player) -> {
-      room.leave(player.room.process_name, player.id)
-      Ok(state)
-    }
-    player.EnterRoom(to_room), _, Some(player) -> {
-      room.enter(to_room.process_name, player.to_session(state.subject, player))
-      Ok(state)
-    }
-    player.LeaveRoom(room_name), _, Some(player) -> {
-      room.leave(room_name, player.id)
       Ok(state)
     }
     player.Unknown(line), Some(conn), _ ->

@@ -78,7 +78,7 @@ pub fn decide_command_say_test() {
 
 pub fn decide_command_quit_test() {
   let s = state()
-  assert player.decide_command(s, command.Quit) == #(s, [player.Leave])
+  assert player.decide_command(s, command.Quit) == #(s, [])
 }
 
 pub fn decide_command_unknown_test() {
@@ -92,11 +92,4 @@ pub fn decide_command_reports_its_own_room_test() {
   let s = state()
   assert s.room.name == "a room"
   assert s.room.id == id.new_room_id("room")
-}
-
-pub fn to_session_test() {
-  let s = state()
-  let session = player.to_session(process.new_subject(), s)
-  assert session.id == s.id
-  assert session.name == s.name
 }

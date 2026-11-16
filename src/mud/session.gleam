@@ -1,22 +1,26 @@
 import gleam/bit_array
 import gleam/erlang/process.{type Subject}
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import mud/command
+import mud/event.{type RoomEvent}
 import mud/id.{type PlayerId, type RoomId}
 import mud/player
+import mud/room
 import mud/world
 
 // ----- State ------------------------------------------------------------
 
 pub type State {
   State(
-    subject: Subject(player.Message),
+    subject: Subject(Message),
     replies: Subject(world.Reply),
     world: process.Name(world.Message),
     entrance: RoomId,
     status: Status,
     buffer: BitArray,
+    room_watch: Option(RoomWatch),
   )
 }
 
@@ -26,18 +30,34 @@ pub type Status {
   InGame(player: player.State)
 }
 
+pub type RoomWatch {
+  RoomWatch(pid: process.Pid, monitor: process.Monitor)
+}
+
+// ----- Message ----------------------------------------------------------
+
+pub type Message {
+  RoomMessage(room: RoomId, event: RoomEvent)
+  WorldMessage(world.Reply)
+  JoinTimeout
+  RoomDown(pid: Option(process.Pid))
+  RetryEnter(room: room.Def, attempt: Int)
+}
+
 // ----- Effect -----------------------------------------------------------
 
 pub type Effect {
   Do(player.Action)
   Join(RoomId)
+  EnterRoom(room: room.Def, attempt: Int)
+  LeaveRoom(process.Name(room.Message))
   Stop
 }
 
 // ----- Logic ------------------------------------------------------------
 
 pub fn started(
-  subject: Subject(player.Message),
+  subject: Subject(Message),
   replies: Subject(world.Reply),
   world: process.Name(world.Message),
   entrance: RoomId,
@@ -50,6 +70,7 @@ pub fn started(
       entrance: entrance,
       status: AwaitingName,
       buffer: <<>>,
+      room_watch: None,
     )
   let effects = [
     Do(player.Output("Welcome to the dungeon! What is your name?")),
@@ -61,11 +82,17 @@ pub fn closed(state: State) -> List(Effect) {
   case state.status {
     AwaitingName -> []
     Joining(_, _) -> []
-    InGame(_) -> [Do(player.Leave)]
+    InGame(_) ->
+      case state.status {
+        InGame(player_state) -> [LeaveRoom(player_state.room.process_name)]
+        _ -> []
+      }
   }
 }
 
 const max_line = 1024
+
+const max_enter_attempts = 10
 
 // for bytes received from the socket
 pub fn receive_bytes(state: State, chunk: BitArray) -> #(State, List(Effect)) {
@@ -98,10 +125,10 @@ fn handle_line(state: State, line: String) -> #(State, List(Effect)) {
     Joining(_, _) -> #(state, [])
     InGame(player_state) ->
       case command.parse(line) {
-        command.Quit -> {
-          let #(_, actions) = player.decide_command(player_state, command.Quit)
-          #(state, list.append(list.map(actions, Do), [Stop]))
-        }
+        command.Quit -> #(state, [
+          LeaveRoom(player_state.room.process_name),
+          Stop,
+        ])
         parsed -> {
           let #(_, actions) = player.decide_command(player_state, parsed)
           #(state, list.map(actions, Do))
@@ -132,11 +159,11 @@ pub fn join_failed(
 // for messages received from other processes
 pub fn receive_message(
   state: State,
-  message: player.Message,
+  message: Message,
 ) -> #(State, List(Effect)) {
   case message {
-    player.WorldMessage(reply) -> receive_reply(state, reply)
-    player.RoomMessage(room_id, room_event) ->
+    WorldMessage(reply) -> receive_reply(state, reply)
+    RoomMessage(room_id, room_event) ->
       case state.status {
         InGame(player_state) if player_state.room.id == room_id -> {
           let #(_, actions) = player.decide(player_state, room_event)
@@ -147,10 +174,31 @@ pub fn receive_message(
         AwaitingName -> #(state, [])
         Joining(_, _) -> #(state, [])
       }
-    player.JoinTimeout ->
+    JoinTimeout ->
       case state.status {
         Joining(_, _) -> #(State(..state, status: AwaitingName), [
           Do(player.Output("The world is not answering, try again: ")),
+        ])
+        _ -> #(state, [])
+      }
+    RoomDown(Some(pid)) ->
+      case state.status, state.room_watch {
+        InGame(player_state), Some(RoomWatch(watched_pid, _))
+          if pid == watched_pid
+        -> #(State(..state, room_watch: None), [
+          EnterRoom(player_state.room, attempt: 0),
+        ])
+        _, _ -> #(state, [])
+      }
+    RoomDown(None) -> #(state, [])
+    RetryEnter(room, attempt) ->
+      case state.status {
+        InGame(_) if attempt > max_enter_attempts -> #(state, [
+          Do(player.Output("The room is not available. Disconnecting.")),
+          Stop,
+        ])
+        InGame(_) -> #(state, [
+          EnterRoom(room, attempt),
         ])
         _ -> #(state, [])
       }
@@ -164,7 +212,7 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
         Joining(id:, name:) -> {
           let player_state = player.State(id:, name:, room:, world: state.world)
           #(State(..state, status: InGame(player_state)), [
-            Do(player.EnterRoom(room)),
+            EnterRoom(room, attempt: 0),
           ])
         }
         AwaitingName -> #(state, [])
@@ -181,8 +229,8 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
           let from_room = player_state.room
           let new_player_state = player.State(..player_state, room: to_room)
           #(State(..state, status: InGame(new_player_state)), [
-            Do(player.LeaveRoom(from_room.process_name)),
-            Do(player.EnterRoom(to_room)),
+            LeaveRoom(from_room.process_name),
+            EnterRoom(to_room, attempt: 0),
           ])
         }
         // stale reply, ignore
@@ -230,4 +278,19 @@ fn clean_line(line: String) -> Result(String, Nil) {
     "" -> Error(Nil)
     clean -> Ok(clean)
   }
+}
+
+// ------ Public helpers --------------------------------------------------
+
+fn to_listener(player: Subject(Message)) -> event.Listener {
+  event.Listener(fn(room_id, room_event) {
+    process.send(player, RoomMessage(room_id, room_event))
+  })
+}
+
+pub fn to_session(
+  player: Subject(Message),
+  player_state: player.State,
+) -> event.Session {
+  event.Session(player_state.id, player_state.name, to_listener(player))
 }
