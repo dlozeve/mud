@@ -1,15 +1,22 @@
 import gleam/bit_array
+import gleam/bytes_tree
 import gleam/dict
+import gleam/erlang/charlist
 import gleam/erlang/process
 import gleam/int
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleam/otp/static_supervisor
+import gleam/string
+import glisten/socket
+import glisten/socket/options
+import glisten/tcp
 import mud/direction
 import mud/event
 import mud/player
 import mud/room
 import mud/runner
+import mud/server
 import mud/session
 import mud/tree
 import mud/world
@@ -23,6 +30,7 @@ type World {
   World(
     supervisor: process.Pid,
     world_pid: process.Pid,
+    server_pid: Option(process.Pid),
     world: process.Name(world.Message),
     entrance: room.Def,
     corridor: room.Def,
@@ -62,6 +70,7 @@ fn start_world() -> World {
   World(
     supervisor: supervisor.pid,
     world_pid: started.pid,
+    server_pid: None,
     world: world_name,
     entrance: entrance,
     corridor: corridor,
@@ -73,7 +82,27 @@ fn stop_world(world: World) -> Nil {
   process.kill(world.supervisor)
   process.unlink(world.world_pid)
   process.kill(world.world_pid)
+  case world.server_pid {
+    Some(pid) -> {
+      process.unlink(pid)
+      process.kill(pid)
+    }
+    None -> Nil
+  }
   Nil
+}
+
+// Start the real TCP server on port 0 and return the port the OS assigned.
+fn start_world_with_server() -> #(World, Int) {
+  let world = start_world()
+  let #(child, listener) =
+    server.server_child_with_listener(world.world, world.entrance.id, 0)
+  let start = child.start
+  let assert Ok(started) = start()
+  #(
+    World(..world, server_pid: Some(started.pid)),
+    server.listener_port(listener, 1000),
+  )
 }
 
 // A test-side session: it runs the real session logic and the real effect
@@ -447,5 +476,126 @@ pub fn killed_session_is_evicted_and_name_freed_test() {
   send_line(bob, "quit")
   expect_stopped(bob)
 
+  stop_world(world)
+}
+
+// ----- T4: real sockets -------------------------------------------------
+
+type Reader {
+  Reader(socket: socket.Socket, buffer: String)
+}
+
+@external(erlang, "gen_tcp", "connect")
+fn do_connect(
+  address: charlist.Charlist,
+  port: Int,
+  tcp_options: List(options.ErlangTcpOption),
+) -> Result(socket.Socket, socket.SocketReason)
+
+fn connect(port: Int) -> Reader {
+  let tcp_options =
+    [options.Mode(options.Binary), options.ActiveMode(options.Passive)]
+    |> options.to_erl_options
+  let assert Ok(sock) =
+    do_connect(charlist.from_string("127.0.0.1"), port, tcp_options)
+  Reader(socket: sock, buffer: "")
+}
+
+// TCP is a stream: a single receive can return part of a line or several
+// lines, so keep the unread tail in the reader.
+fn read_line(reader: Reader) -> #(Reader, String) {
+  case string.split_once(reader.buffer, "\n") {
+    Ok(#(line, rest)) -> #(Reader(..reader, buffer: rest), line)
+    Error(_) ->
+      case tcp.receive_timeout(reader.socket, 0, 5000) {
+        Ok(chunk) -> {
+          let text = case bit_array.to_string(chunk) {
+            Ok(text) -> text
+            Error(_) -> panic as "server sent invalid utf-8"
+          }
+          read_line(Reader(..reader, buffer: reader.buffer <> text))
+        }
+        Error(reason) ->
+          panic as { "receive failed: " <> socket.reason_to_string(reason) }
+      }
+  }
+}
+
+fn expect_lines(reader: Reader, expected: List(String)) -> Reader {
+  list.fold(expected, reader, fn(reader, line) {
+    let #(reader, actual) = read_line(reader)
+    case actual == line {
+      True -> reader
+      False ->
+        panic as { "expected \"" <> line <> "\", got \"" <> actual <> "\"" }
+    }
+  })
+}
+
+fn write_line(reader: Reader, line: String) -> Nil {
+  let assert Ok(_) =
+    tcp.send(reader.socket, bytes_tree.from_string(line <> "\n"))
+  Nil
+}
+
+fn expect_closed(reader: Reader) -> Nil {
+  case tcp.receive_timeout(reader.socket, 0, 5000) {
+    Error(socket.Closed) -> Nil
+    Error(reason) ->
+      panic as {
+        "expected the connection to close, got "
+        <> socket.reason_to_string(reason)
+      }
+    Ok(_) -> panic as "expected the connection to close, got data"
+  }
+}
+
+fn close_reader(reader: Reader) -> Nil {
+  let _ = tcp.close(reader.socket)
+  Nil
+}
+
+pub fn socket_end_to_end_test() {
+  let #(world, port) = start_world_with_server()
+  let alice = connect(port)
+  let bob = connect(port)
+
+  let alice = expect_lines(alice, [welcome])
+  let bob = expect_lines(bob, [welcome])
+
+  write_line(alice, "Alice")
+  let alice =
+    expect_lines(alice, string.split(you_are_in(world.entrance), "\n"))
+
+  write_line(bob, "Bob")
+  let bob = expect_lines(bob, string.split(you_are_in(world.entrance), "\n"))
+  let alice = expect_lines(alice, ["Bob arrives."])
+
+  write_line(alice, "look")
+  let alice =
+    expect_lines(alice, string.split(you_are_in(world.entrance), "\n"))
+
+  write_line(alice, "go north")
+  let alice =
+    expect_lines(alice, string.split(you_are_in(world.corridor), "\n"))
+  let bob = expect_lines(bob, ["Alice leaves."])
+
+  write_line(bob, "go north")
+  let bob = expect_lines(bob, string.split(you_are_in(world.corridor), "\n"))
+  let alice = expect_lines(alice, ["Bob arrives."])
+
+  write_line(alice, "say hi")
+  let alice = expect_lines(alice, ["You say: hi"])
+  let bob = expect_lines(bob, ["Alice says: hi"])
+
+  write_line(alice, "quit")
+  expect_closed(alice)
+  let bob = expect_lines(bob, ["Alice leaves."])
+
+  write_line(bob, "quit")
+  expect_closed(bob)
+
+  close_reader(alice)
+  close_reader(bob)
   stop_world(world)
 }

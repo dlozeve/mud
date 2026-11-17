@@ -4,6 +4,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/static_supervisor
 import gleam/otp/supervision
 import glisten.{type Connection}
+import glisten/internal/listener
 import glisten/socket
 import glisten/socket/options
 import mud/room
@@ -11,16 +12,39 @@ import mud/runner
 import mud/session
 import mud/world
 
+// The listener is named explicitly so that callers can ask the OS which port
+// was assigned when starting on port 0.
+pub type Listener {
+  Listener(name: process.Name(listener.Message))
+}
+
 pub fn server_child(
   world: process.Name(world.Message),
   entrance: room.Id,
   port: Int,
 ) -> supervision.ChildSpecification(static_supervisor.Supervisor) {
-  glisten.new(on_init(world, entrance), loop)
-  |> glisten.with_active_state(options.Once)
-  |> glisten.with_pool_size(4)
-  |> glisten.with_close(on_close)
-  |> glisten.supervised(port)
+  let #(child, _listener) = server_child_with_listener(world, entrance, port)
+  child
+}
+
+pub fn server_child_with_listener(
+  world: process.Name(world.Message),
+  entrance: room.Id,
+  port: Int,
+) -> #(supervision.ChildSpecification(static_supervisor.Supervisor), Listener) {
+  let listener_name = process.new_name("glisten_listener")
+  let child =
+    glisten.new(on_init(world, entrance), loop)
+    |> glisten.with_active_state(options.Once)
+    |> glisten.with_pool_size(4)
+    |> glisten.with_close(on_close)
+    |> glisten.with_listener_name(listener_name)
+    |> glisten.supervised(port)
+  #(child, Listener(listener_name))
+}
+
+pub fn listener_port(listener: Listener, timeout: Int) -> Int {
+  glisten.get_server_info(listener.name, timeout).port
 }
 
 pub fn on_init(world: process.Name(world.Message), entrance: room.Id) {
