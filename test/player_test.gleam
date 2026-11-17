@@ -3,7 +3,6 @@ import gleam/erlang/process
 import mud/command
 import mud/direction
 import mud/event
-import mud/id
 import mud/player
 import mud/room
 
@@ -49,7 +48,7 @@ pub fn render_say_to_other_test() {
 fn room() -> room.Def {
   room.Def(
     process_name: process.new_name("room"),
-    id: id.new_room_id(),
+    id: room.new_id(),
     name: "a room",
     description: "A room.",
     exits: dict.new(),

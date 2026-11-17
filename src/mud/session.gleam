@@ -6,8 +6,7 @@ import gleam/regexp
 import gleam/result
 import gleam/string
 import mud/command
-import mud/event.{type RoomEvent}
-import mud/id.{type RoomId}
+import mud/event
 import mud/player
 import mud/room
 import mud/world
@@ -19,7 +18,7 @@ pub type State {
     subject: Subject(Message),
     replies: Subject(world.Reply),
     world: process.Name(world.Message),
-    entrance: RoomId,
+    entrance: room.Id,
     status: Status,
     buffer: BitArray,
     room_watch: Option(RoomWatch),
@@ -39,7 +38,7 @@ pub type RoomWatch {
 // ----- Message ----------------------------------------------------------
 
 pub type Message {
-  RoomMessage(room: RoomId, event: RoomEvent)
+  RoomMessage(room: room.Id, event: event.RoomEvent)
   WorldMessage(world.Reply)
   JoinTimeout
   RoomDown(pid: Option(process.Pid))
@@ -50,7 +49,7 @@ pub type Message {
 
 pub type Effect {
   Do(player.Action)
-  Join(RoomId)
+  Join(room.Id)
   EnterRoom(room: room.Def, attempt: Int)
   LeaveRoom(process.Name(room.Message))
   Stop
@@ -62,7 +61,7 @@ pub fn started(
   subject: Subject(Message),
   replies: Subject(world.Reply),
   world: process.Name(world.Message),
-  entrance: RoomId,
+  entrance: room.Id,
 ) -> #(State, List(Effect)) {
   let state =
     State(
@@ -345,19 +344,10 @@ fn clean_line(line: String) -> Result(String, Nil) {
 
 // ------ Public helpers --------------------------------------------------
 
-fn to_listener(player: Subject(Message)) -> event.Listener {
-  event.Listener(fn(room_id, room_event) {
-    process.send(player, RoomMessage(room_id, room_event))
+// The room's handle on this player: it tells the player about room events by
+// posting them into the connection's own inbox.
+pub fn to_occupant(state: State, player_state: player.State) -> room.Occupant {
+  room.occupant(player_state.name, player_state.pid, fn(room_id, room_event) {
+    process.send(state.subject, RoomMessage(room_id, room_event))
   })
-}
-
-pub fn to_session(
-  player: Subject(Message),
-  player_state: player.State,
-) -> event.Session {
-  event.Session(
-    name: player_state.name,
-    pid: player_state.pid,
-    listener: to_listener(player),
-  )
 }

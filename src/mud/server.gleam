@@ -8,7 +8,6 @@ import gleam/string
 import glisten.{type Connection}
 import glisten/socket
 import glisten/socket/options
-import mud/id.{type RoomId}
 import mud/player
 import mud/room
 import mud/session
@@ -16,7 +15,7 @@ import mud/world
 
 pub fn server_child(
   world: process.Name(world.Message),
-  entrance: RoomId,
+  entrance: room.Id,
   port: Int,
 ) -> supervision.ChildSpecification(static_supervisor.Supervisor) {
   glisten.new(on_init(world, entrance), loop)
@@ -26,7 +25,7 @@ pub fn server_child(
   |> glisten.supervised(port)
 }
 
-pub fn on_init(world: process.Name(world.Message), entrance: RoomId) {
+pub fn on_init(world: process.Name(world.Message), entrance: room.Id) {
   fn(conn: Connection(session.Message)) -> #(
     session.State,
     Option(process.Selector(session.Message)),
@@ -114,10 +113,7 @@ fn run_effects(
               process.demonitor_process(monitor)
             None -> Nil
           }
-          room.enter(
-            to_room.process_name,
-            session.to_session(state.subject, player),
-          )
+          room.enter(to_room.process_name, session.to_occupant(state, player))
           let room_watch =
             Some(session.RoomWatch(pid: pid, monitor: process.monitor(pid)))
           run_effects(session.State(..state, room_watch:), conn, rest)

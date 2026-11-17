@@ -7,7 +7,6 @@ import gleam/otp/actor
 import gleam/otp/static_supervisor
 import gleam/otp/supervision
 import mud/direction
-import mud/id
 import mud/room
 import mud/server
 import mud/world
@@ -69,8 +68,8 @@ fn world_child(
 }
 
 pub fn main() -> Nil {
-  let entrance_id = id.new_room_id()
-  let corridor_id = id.new_room_id()
+  let entrance_id = room.new_id()
+  let corridor_id = room.new_id()
   let entrance =
     room.Def(
       process_name: process.new_name("entrance"),

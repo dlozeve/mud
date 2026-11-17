@@ -5,7 +5,6 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/string
 import mud/direction.{type Direction}
-import mud/id.{type RoomId}
 import mud/room
 
 // ----- State ------------------------------------------------------------
@@ -14,20 +13,20 @@ pub type State {
   // The directory is keyed by the normalised player name: names are what have
   // to be unique, while player ids are opaque handles minted per connection and
   // shared with the rooms, not with this catalog.
-  State(rooms: Dict(RoomId, room.Def), players: Dict(String, process.Pid))
+  State(rooms: Dict(room.Id, room.Def), players: Dict(String, process.Pid))
 }
 
 // ----- Message ----------------------------------------------------------
 
 pub type Message {
-  Join(name: String, pid: process.Pid, at: RoomId, reply_to: Subject(Reply))
-  Move(from: RoomId, dir: Direction, reply_to: Subject(Reply))
+  Join(name: String, pid: process.Pid, at: room.Id, reply_to: Subject(Reply))
+  Move(from: room.Id, dir: Direction, reply_to: Subject(Reply))
   Down(pid: Option(process.Pid))
 }
 
 pub type Reply {
   Joined(Result(room.Def, JoinError))
-  Moved(from: RoomId, result: Result(room.Def, MoveError))
+  Moved(from: room.Id, result: Result(room.Def, MoveError))
 }
 
 pub type JoinError {
@@ -87,8 +86,8 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
 }
 
 fn resolve_direction(
-  rooms: Dict(RoomId, room.Def),
-  at: RoomId,
+  rooms: Dict(room.Id, room.Def),
+  at: room.Id,
   dir: Direction,
 ) -> Result(room.Def, MoveError) {
   case dict.get(rooms, at) {
@@ -133,7 +132,7 @@ pub fn join(
   world: process.Name(Message),
   name: String,
   pid: process.Pid,
-  at: RoomId,
+  at: room.Id,
   reply_to: Subject(Reply),
 ) -> Nil {
   case process.named(world) {
@@ -148,7 +147,7 @@ pub fn join(
 
 pub fn move(
   world: process.Name(Message),
-  from: RoomId,
+  from: room.Id,
   dir: Direction,
   reply_to: Subject(Reply),
 ) -> Result(Nil, Nil) {

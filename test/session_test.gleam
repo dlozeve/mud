@@ -5,7 +5,6 @@ import gleam/option.{None, Some}
 import gleam/string
 import mud/direction
 import mud/event
-import mud/id
 import mud/player
 import mud/room
 import mud/session
@@ -55,7 +54,7 @@ pub fn take_lines_utf8_split_across_chunks_test() {
 fn room_info(name: String) -> room.Def {
   room.Def(
     process_name: process.new_name(name),
-    id: id.new_room_id(),
+    id: room.new_id(),
     name: name,
     description: name <> " description",
     exits: dict.new(),
@@ -74,7 +73,7 @@ fn state_with_world(
     subject: process.new_subject(),
     replies: process.new_subject(),
     world: world_name,
-    entrance: id.new_room_id(),
+    entrance: room.new_id(),
     status: status,
     buffer: <<>>,
     room_watch: None,
@@ -111,7 +110,7 @@ pub fn started_test() {
   let subject = process.new_subject()
   let replies = process.new_subject()
   let world = process.new_name("world")
-  let entrance = id.new_room_id()
+  let entrance = room.new_id()
   let #(state, effects) = session.started(subject, replies, world, entrance)
   assert effects
     == [session.Do(player.Output("Welcome to the dungeon! What is your name?"))]
@@ -245,7 +244,7 @@ pub fn receive_message_stale_room_test() {
   let state = in_game_state()
   assert session.receive_message(
       state,
-      session.RoomMessage(id.new_room_id(), event.YouSaid("hi")),
+      session.RoomMessage(room.new_id(), event.YouSaid("hi")),
     )
     |> effects
     == []
@@ -568,10 +567,10 @@ pub fn closed_in_joining_test() {
   assert session.closed(joining_state()) == []
 }
 
-pub fn to_session_test() {
-  let s = in_game_state()
-  let assert session.InGame(player_state) = s.status
-  let sess = session.to_session(process.new_subject(), player_state)
-  assert sess.pid == player_state.pid
-  assert sess.name == player_state.name
+pub fn to_occupant_test() {
+  let state = in_game_state()
+  let assert session.InGame(player_state) = state.status
+  let occupant = session.to_occupant(state, player_state)
+  assert occupant.pid == player_state.pid
+  assert occupant.name == player_state.name
 }

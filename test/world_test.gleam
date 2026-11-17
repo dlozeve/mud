@@ -3,14 +3,13 @@ import gleam/erlang/process
 import gleam/list
 import gleam/option.{None, Some}
 import mud/direction.{type Direction}
-import mud/id.{type RoomId}
 import mud/room
 import mud/world
 
 fn room_with(
-  id: RoomId,
+  id: room.Id,
   name: String,
-  exits: Dict(Direction, RoomId),
+  exits: Dict(Direction, room.Id),
 ) -> room.Def {
   room.Def(
     process_name: process.new_name(name),
@@ -22,8 +21,8 @@ fn room_with(
 }
 
 fn rooms() {
-  let r1 = id.new_room_id()
-  let r2 = id.new_room_id()
+  let r1 = room.new_id()
+  let r2 = room.new_id()
 
   let entrance =
     room_with(r1, "entrance", dict.from_list([#(direction.North, r2)]))
@@ -42,7 +41,7 @@ fn state_with(rooms: List(room.Def)) -> world.State {
 // ----- Join -------------------------------------------------------------
 
 pub fn join_replies_with_the_room_test() {
-  let r1 = id.new_room_id()
+  let r1 = room.new_id()
   let entrance = room_with(r1, "entrance", dict.new())
   let state = state_with([entrance])
   let reply_to = process.new_subject()
@@ -64,8 +63,8 @@ pub fn join_replies_with_the_room_test() {
 }
 
 pub fn join_unknown_room_test() {
-  let r1 = id.new_room_id()
-  let r2 = id.new_room_id()
+  let r1 = room.new_id()
+  let r2 = room.new_id()
   let entrance = room_with(r1, "entrance", dict.new())
   let state = state_with([entrance])
   let reply_to = process.new_subject()
@@ -82,7 +81,7 @@ pub fn join_unknown_room_test() {
 }
 
 pub fn join_while_already_logged_in_test() {
-  let r1 = id.new_room_id()
+  let r1 = room.new_id()
   let entrance = room_with(r1, "entrance", dict.new())
   let other_pid = process.spawn(fn() { Nil })
   let state =
@@ -108,7 +107,7 @@ pub fn join_while_already_logged_in_test() {
 }
 
 pub fn join_with_a_different_name_test() {
-  let r1 = id.new_room_id()
+  let r1 = room.new_id()
   let entrance = room_with(r1, "entrance", dict.new())
   let other_pid = process.spawn(fn() { Nil })
   let state =
@@ -131,7 +130,7 @@ pub fn join_with_a_different_name_test() {
 // ----- Eviction ---------------------------------------------------------
 
 pub fn down_frees_the_name_test() {
-  let r1 = id.new_room_id()
+  let r1 = room.new_id()
   let entrance = room_with(r1, "entrance", dict.new())
   let dead_pid = process.spawn(fn() { Nil })
   let state =
@@ -147,7 +146,7 @@ pub fn down_frees_the_name_test() {
 }
 
 pub fn down_of_an_unknown_process_is_ignored_test() {
-  let r1 = id.new_room_id()
+  let r1 = room.new_id()
   let entrance = room_with(r1, "entrance", dict.new())
   let state =
     world.State(
@@ -162,7 +161,7 @@ pub fn down_of_an_unknown_process_is_ignored_test() {
 }
 
 pub fn down_of_none_is_ignored_test() {
-  let r1 = id.new_room_id()
+  let r1 = room.new_id()
   let entrance = room_with(r1, "entrance", dict.new())
   let state =
     world.State(
@@ -244,11 +243,7 @@ pub fn move_from_an_unknown_room_test() {
   let #(new_state, actions) =
     world.decide(
       state,
-      world.Move(
-        from: id.new_room_id(),
-        dir: direction.North,
-        reply_to: reply_to,
-      ),
+      world.Move(from: room.new_id(), dir: direction.North, reply_to: reply_to),
     )
 
   let assert [world.MoveReply(new_reply_to, world.Moved(_id, e))] = actions
@@ -265,6 +260,6 @@ pub fn sending_to_an_unregistered_world_is_dropped_test() {
   let world_name = process.new_name("no such world")
   let replies = process.new_subject()
 
-  world.join(world_name, "Alice", process.self(), id.new_room_id(), replies)
-  world.move(world_name, id.new_room_id(), direction.North, replies)
+  world.join(world_name, "Alice", process.self(), room.new_id(), replies)
+  world.move(world_name, room.new_id(), direction.North, replies)
 }
