@@ -374,3 +374,78 @@ pub fn world_down_reports_and_session_drops_cleanly_test() {
 
   stop_world(world)
 }
+
+// ----- T3: eviction ----------------------------------------------------
+
+const name_in_use = "This name is already in use. Choose another name: "
+
+// The room and the world both discover a dead player through monitors, but
+// their DOWN messages are independent. The room can broadcast the departure
+// before the world has freed the name, so retry the join for a short while.
+fn join_with_retry(client: Client, name: String, room: room.Def) -> Nil {
+  join_with_retry_attempt(client, name, room, 50)
+}
+
+fn join_with_retry_attempt(
+  client: Client,
+  name: String,
+  room: room.Def,
+  attempts: Int,
+) -> Nil {
+  let joined = you_are_in(room) <> "\n"
+  let in_use = name_in_use <> "\n"
+  send_line(client, name)
+  case process.receive(client.events, 2000) {
+    Ok(Output(_, actual)) if actual == joined -> Nil
+    Ok(Output(_, actual)) if actual == in_use -> {
+      assert attempts > 0
+      process.sleep(10)
+      join_with_retry_attempt(client, name, room, attempts - 1)
+    }
+    Ok(Output(_, actual)) ->
+      panic as { "unexpected output while joining: " <> actual }
+    Ok(Stopped(_)) -> panic as "client stopped while joining"
+    Ok(Ready(_)) -> panic as "unexpected ready"
+    Error(_) -> panic as "timed out while joining"
+  }
+}
+
+pub fn killed_session_is_evicted_and_name_freed_test() {
+  let world = start_world()
+  let alice = start_client(world, 1)
+  let bob = start_client(world, 2)
+
+  expect_output(alice, welcome)
+  expect_output(bob, welcome)
+
+  send_line(alice, "Alice")
+  expect_output(alice, you_are_in(world.entrance))
+
+  send_line(bob, "Bob")
+  expect_output(bob, you_are_in(world.entrance))
+  expect_output(alice, "Bob arrives.")
+
+  // Kill Alice's connection process. The room monitors it and evicts her.
+  process.unlink(alice.pid)
+  process.kill(alice.pid)
+  expect_output(bob, "Alice leaves.")
+
+  // The name is free again: a new session can take it.
+  let alice_again = start_client(world, 3)
+  expect_output(alice_again, welcome)
+  join_with_retry(alice_again, "Alice", world.entrance)
+  expect_output(bob, "Alice arrives.")
+
+  // The new session is a real occupant.
+  send_line(alice_again, "say hi")
+  expect_output(alice_again, "You say: hi")
+  expect_output(bob, "Alice says: hi")
+
+  send_line(alice_again, "quit")
+  expect_stopped(alice_again)
+  expect_output(bob, "Alice leaves.")
+  send_line(bob, "quit")
+  expect_stopped(bob)
+
+  stop_world(world)
+}
