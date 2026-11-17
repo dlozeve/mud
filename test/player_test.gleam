@@ -49,7 +49,7 @@ pub fn render_say_to_other_test() {
 fn room() -> room.Def {
   room.Def(
     process_name: process.new_name("room"),
-    id: id.new_room_id("room"),
+    id: id.new_room_id(),
     name: "a room",
     description: "A room.",
     exits: dict.new(),
@@ -57,7 +57,7 @@ fn room() -> room.Def {
 }
 
 fn state() -> player.State {
-  player.State(id: id.new_player_id("alice"), name: "Alice", room: room())
+  player.State(pid: process.self(), name: "Alice", room: room())
 }
 
 pub fn decide_event_renders_to_output_test() {
@@ -86,11 +86,4 @@ pub fn decide_command_unknown_test() {
   let s = state()
   assert player.decide_command(s, command.Unknown("sing"))
     == #(s, [player.Output("Unknown command: sing")])
-}
-
-// The player carries the room it is in, so these are pure lookups.
-pub fn decide_command_reports_its_own_room_test() {
-  let s = state()
-  assert s.room.name == "a room"
-  assert s.room.id == id.new_room_id("room")
 }

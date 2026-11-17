@@ -1,16 +1,16 @@
+import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/string
 import mud/command.{type Command}
 import mud/direction.{type Direction}
 import mud/event.{type RoomEvent}
-import mud/id.{type PlayerId}
 import mud/room
 
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  State(id: PlayerId, name: String, room: room.Def)
+  State(pid: process.Pid, name: String, room: room.Def)
 }
 
 // ----- Action -----------------------------------------------------------

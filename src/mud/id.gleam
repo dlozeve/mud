@@ -1,15 +1,9 @@
-pub opaque type PlayerId {
-  PlayerId(String)
-}
-
-pub fn new_player_id(id: String) -> PlayerId {
-  PlayerId(id)
-}
+import youid/uuid
 
 pub opaque type RoomId {
-  RoomId(String)
+  RoomId(uuid.Uuid)
 }
 
-pub fn new_room_id(id: String) -> RoomId {
-  RoomId(id)
+pub fn new_room_id() -> RoomId {
+  RoomId(uuid.v7())
 }

@@ -5,12 +5,13 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import mud/direction.{type Direction}
 import mud/event
-import mud/id.{type PlayerId, type RoomId}
+import mud/id.{type RoomId}
 
 // ----- State ------------------------------------------------------------
 
+// Occupants are keyed by their connection pid.
 pub type State {
-  State(def: Def, occupants: Dict(PlayerId, event.Session))
+  State(def: Def, occupants: Dict(process.Pid, event.Session))
 }
 
 pub type Def {
@@ -27,16 +28,16 @@ pub type Def {
 
 pub type Message {
   Enter(session: event.Session)
-  Leave(player: PlayerId)
-  Look(player: PlayerId)
-  Say(speaker: PlayerId, text: String)
+  Leave(pid: process.Pid)
+  Look(pid: process.Pid)
+  Say(speaker: process.Pid, text: String)
   Down(pid: Option(process.Pid))
 }
 
 // ----- Action -----------------------------------------------------------
 
 pub type Action {
-  Tell(player: PlayerId, room_event: event.RoomEvent)
+  Tell(pid: process.Pid, room_event: event.RoomEvent)
   Monitor(pid: process.Pid)
 }
 
@@ -45,14 +46,14 @@ pub type Action {
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
     Enter(session) -> {
-      case dict.get(state.occupants, session.id) {
+      case dict.get(state.occupants, session.pid) {
         Ok(_) -> #(state, [])
         Error(_) -> {
-          let occupants = dict.insert(state.occupants, session.id, session)
+          let occupants = dict.insert(state.occupants, session.pid, session)
           let actions = [
             Monitor(session.pid),
             Tell(
-              session.id,
+              session.pid,
               event.YouAreIn(
                 room_name: state.def.name,
                 room_description: state.def.description,
@@ -63,7 +64,7 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
             ),
             ..tell_others(
               occupants,
-              session.id,
+              session.pid,
               event.PlayerArrived(session.name),
             )
           ]
@@ -71,10 +72,10 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
         }
       }
     }
-    Leave(player) -> {
-      case dict.get(state.occupants, player) {
+    Leave(pid) -> {
+      case dict.get(state.occupants, pid) {
         Ok(session) -> {
-          let occupants = dict.delete(state.occupants, player)
+          let occupants = dict.delete(state.occupants, pid)
           let tells = broadcast(occupants, event.PlayerLeft(session.name))
           #(State(..state, occupants:), tells)
         }
@@ -86,7 +87,7 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
         Ok(session) -> {
           let tell =
             Tell(
-              session.id,
+              session.pid,
               event.YouAreIn(
                 room_name: state.def.name,
                 room_description: state.def.description,
@@ -103,10 +104,10 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
       case dict.get(state.occupants, speaker) {
         Ok(session) -> {
           let tells = [
-            Tell(session.id, event.YouSaid(text:)),
+            Tell(session.pid, event.YouSaid(text:)),
             ..tell_others(
               state.occupants,
-              session.id,
+              session.pid,
               event.PlayerSaid(player_name: session.name, text:),
             )
           ]
@@ -115,19 +116,13 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
         Error(_) -> #(state, [])
       }
     }
-    Down(Some(pid)) ->
-      case
-        dict.to_list(state.occupants) |> list.find(fn(e) { e.1.pid == pid })
-      {
-        Ok(#(player_id, _session)) -> decide(state, Leave(player_id))
-        Error(_) -> #(state, [])
-      }
+    Down(Some(pid)) -> decide(state, Leave(pid))
     Down(None) -> #(state, [])
   }
 }
 
 fn broadcast(
-  occupants: Dict(PlayerId, event.Session),
+  occupants: Dict(process.Pid, event.Session),
   room_event: event.RoomEvent,
 ) -> List(Action) {
   occupants
@@ -136,8 +131,8 @@ fn broadcast(
 }
 
 fn tell_others(
-  occupants: Dict(PlayerId, event.Session),
-  except: PlayerId,
+  occupants: Dict(process.Pid, event.Session),
+  except: process.Pid,
   room_event: event.RoomEvent,
 ) -> List(Action) {
   occupants
@@ -150,8 +145,8 @@ fn tell_others(
 
 fn run(action: Action, state: State) -> Nil {
   case action {
-    Tell(player, room_event) -> {
-      case dict.get(state.occupants, player) {
+    Tell(pid, room_event) -> {
+      case dict.get(state.occupants, pid) {
         Ok(session) -> session.listener.tell(state.def.id, room_event)
         Error(_) -> Nil
       }
@@ -190,23 +185,23 @@ pub fn enter(room_name: process.Name(Message), session: event.Session) -> Nil {
   }
 }
 
-pub fn leave(room_name: process.Name(Message), player: PlayerId) -> Nil {
+pub fn leave(room_name: process.Name(Message), pid: process.Pid) -> Nil {
   case checked_named_subject(room_name) {
-    Ok(subject) -> actor.send(subject, Leave(player:))
+    Ok(subject) -> actor.send(subject, Leave(pid:))
     Error(_) -> Nil
   }
 }
 
-pub fn look(room_name: process.Name(Message), player: PlayerId) -> Nil {
+pub fn look(room_name: process.Name(Message), pid: process.Pid) -> Nil {
   case checked_named_subject(room_name) {
-    Ok(subject) -> actor.send(subject, Look(player:))
+    Ok(subject) -> actor.send(subject, Look(pid:))
     Error(_) -> Nil
   }
 }
 
 pub fn say(
   room_name: process.Name(Message),
-  speaker: PlayerId,
+  speaker: process.Pid,
   text: String,
 ) -> Nil {
   case checked_named_subject(room_name) {

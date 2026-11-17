@@ -69,8 +69,8 @@ fn world_child(
 }
 
 pub fn main() -> Nil {
-  let entrance_id = id.new_room_id("entrance")
-  let corridor_id = id.new_room_id("corridor")
+  let entrance_id = id.new_room_id()
+  let corridor_id = id.new_room_id()
   let entrance =
     room.Def(
       process_name: process.new_name("entrance"),

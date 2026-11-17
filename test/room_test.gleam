@@ -8,12 +8,12 @@ import mud/event
 import mud/id
 import mud/room
 
+// Occupants are keyed by pid, so every test session needs its own.
 fn session_with(name: String) -> event.Session {
   event.Session(
-    id.new_player_id(name <> "_id"),
-    name,
-    process.self(),
-    event.Listener(fn(_, _) { Nil }),
+    name: name,
+    pid: process.spawn(fn() { Nil }),
+    listener: event.Listener(fn(_, _) { Nil }),
   )
 }
 
@@ -21,13 +21,13 @@ fn state_with(sessions: List(event.Session)) -> room.State {
   room.State(
     def: room.Def(
       process_name: process.new_name("r1"),
-      id: id.new_room_id("r1"),
+      id: id.new_room_id(),
       name: "room",
       description: "room description",
       exits: dict.new(),
     ),
     occupants: dict.from_list(
-      list.map(sessions, fn(session) { #(session.id, session) }),
+      list.map(sessions, fn(session) { #(session.pid, session) }),
     ),
   )
 }
@@ -36,11 +36,11 @@ pub fn say_broadcast_test() {
   let alice = session_with("Alice")
   let bob = session_with("Bob")
   let state = state_with([alice, bob])
-  let #(_state, actions) = room.decide(state, room.Say(alice.id, "hi"))
+  let #(_state, actions) = room.decide(state, room.Say(alice.pid, "hi"))
   assert set.from_list(actions)
     == set.from_list([
-      room.Tell(alice.id, event.YouSaid("hi")),
-      room.Tell(bob.id, event.PlayerSaid(alice.name, "hi")),
+      room.Tell(alice.pid, event.YouSaid("hi")),
+      room.Tell(bob.pid, event.PlayerSaid(alice.name, "hi")),
     ])
 }
 
@@ -54,20 +54,20 @@ pub fn enter_broadcast_test() {
     == set.from_list([
       room.Monitor(carol.pid),
       room.Tell(
-        carol.id,
+        carol.pid,
         event.YouAreIn(
           room_name: state.def.name,
           room_description: state.def.description,
           exits: dict.keys(state.def.exits),
         ),
       ),
-      room.Tell(alice.id, event.PlayerArrived(carol.name)),
-      room.Tell(bob.id, event.PlayerArrived(carol.name)),
+      room.Tell(alice.pid, event.PlayerArrived(carol.name)),
+      room.Tell(bob.pid, event.PlayerArrived(carol.name)),
     ])
   assert dict.size(new_state.occupants) == 3
-  assert dict.get(new_state.occupants, alice.id) == Ok(alice)
-  assert dict.get(new_state.occupants, bob.id) == Ok(bob)
-  assert dict.get(new_state.occupants, carol.id) == Ok(carol)
+  assert dict.get(new_state.occupants, alice.pid) == Ok(alice)
+  assert dict.get(new_state.occupants, bob.pid) == Ok(bob)
+  assert dict.get(new_state.occupants, carol.pid) == Ok(carol)
 }
 
 pub fn leave_broadcast_test() {
@@ -75,11 +75,11 @@ pub fn leave_broadcast_test() {
   let bob = session_with("Bob")
   let carol = session_with("Carol")
   let state = state_with([alice, bob, carol])
-  let #(_state, actions) = room.decide(state, room.Leave(alice.id))
+  let #(_state, actions) = room.decide(state, room.Leave(alice.pid))
   assert set.from_list(actions)
     == set.from_list([
-      room.Tell(bob.id, event.PlayerLeft(alice.name)),
-      room.Tell(carol.id, event.PlayerLeft(alice.name)),
+      room.Tell(bob.pid, event.PlayerLeft(alice.name)),
+      room.Tell(carol.pid, event.PlayerLeft(alice.name)),
     ])
 }
 
@@ -88,7 +88,7 @@ pub fn say_non_occupant_test() {
   let bob = session_with("Bob")
   let carol = session_with("Carol")
   let state = state_with([alice, bob])
-  let #(_state, actions) = room.decide(state, room.Say(carol.id, "hi"))
+  let #(_state, actions) = room.decide(state, room.Say(carol.pid, "hi"))
   assert actions == []
 }
 
@@ -97,7 +97,7 @@ pub fn leave_non_occupant_test() {
   let bob = session_with("Bob")
   let carol = session_with("Carol")
   let state = state_with([alice, bob])
-  let #(_state, actions) = room.decide(state, room.Leave(carol.id))
+  let #(_state, actions) = room.decide(state, room.Leave(carol.pid))
   assert actions == []
 }
 
@@ -114,10 +114,9 @@ pub fn enter_twice_test() {
 
 fn session_with_pid(name: String, pid: process.Pid) -> event.Session {
   event.Session(
-    id.new_player_id(name <> "_id"),
-    name,
-    pid,
-    event.Listener(fn(_, _) { Nil }),
+    name: name,
+    pid: pid,
+    listener: event.Listener(fn(_, _) { Nil }),
   )
 }
 
@@ -130,9 +129,9 @@ pub fn down_evicts_the_occupant_test() {
 
   let #(new_state, actions) = room.decide(state, room.Down(Some(alice_pid)))
 
-  assert actions == [room.Tell(bob.id, event.PlayerLeft(alice.name))]
-  assert dict.has_key(new_state.occupants, bob.id)
-  assert !dict.has_key(new_state.occupants, alice.id)
+  assert actions == [room.Tell(bob.pid, event.PlayerLeft(alice.name))]
+  assert dict.has_key(new_state.occupants, bob.pid)
+  assert !dict.has_key(new_state.occupants, alice.pid)
 }
 
 pub fn down_removes_a_dead_player_so_they_can_reenter_test() {
@@ -175,12 +174,12 @@ pub fn you_are_in_lists_exits_in_a_fixed_order_test() {
   let def =
     room.Def(
       process_name: process.new_name("r1"),
-      id: id.new_room_id("r1"),
+      id: id.new_room_id(),
       name: "room",
       description: "room description",
       exits: dict.from_list([
-        #(direction.West, id.new_room_id("west")),
-        #(direction.North, id.new_room_id("north")),
+        #(direction.West, id.new_room_id()),
+        #(direction.North, id.new_room_id()),
       ]),
     )
   let state = room.State(def:, occupants: dict.new())
@@ -192,7 +191,7 @@ pub fn you_are_in_lists_exits_in_a_fixed_order_test() {
     == [
       room.Monitor(alice.pid),
       room.Tell(
-        alice.id,
+        alice.pid,
         event.YouAreIn(
           room_name: "room",
           room_description: "room description",

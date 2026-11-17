@@ -3,20 +3,24 @@ import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import gleam/string
 import mud/direction.{type Direction}
-import mud/id.{type PlayerId, type RoomId}
+import mud/id.{type RoomId}
 import mud/room
 
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  State(rooms: Dict(RoomId, room.Def), players: Dict(PlayerId, process.Pid))
+  // The directory is keyed by the normalised player name: names are what have
+  // to be unique, while player ids are opaque handles minted per connection and
+  // shared with the rooms, not with this catalog.
+  State(rooms: Dict(RoomId, room.Def), players: Dict(String, process.Pid))
 }
 
 // ----- Message ----------------------------------------------------------
 
 pub type Message {
-  Join(player: PlayerId, pid: process.Pid, at: RoomId, reply_to: Subject(Reply))
+  Join(name: String, pid: process.Pid, at: RoomId, reply_to: Subject(Reply))
   Move(from: RoomId, dir: Direction, reply_to: Subject(Reply))
   Down(pid: Option(process.Pid))
 }
@@ -39,7 +43,7 @@ pub type MoveError {
 // ----- Action -----------------------------------------------------------
 
 pub type Action {
-  JoinReply(player: PlayerId, reply_to: Subject(Reply), result: Reply)
+  JoinReply(reply_to: Subject(Reply), result: Reply)
   MoveReply(reply_to: Subject(Reply), result: Reply)
   Monitor(pid: process.Pid)
 }
@@ -48,24 +52,23 @@ pub type Action {
 
 pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
   case message {
-    Join(player, pid, at, reply_to) ->
-      case dict.get(state.rooms, at), dict.get(state.players, player) {
-        Ok(room), Error(_) -> {
-          let new_state =
-            State(..state, players: dict.insert(state.players, player, pid))
-          let actions = [
-            JoinReply(player: player, reply_to:, result: Joined(Ok(room))),
-            Monitor(pid),
-          ]
-          #(new_state, actions)
-        }
-        _, Ok(_) -> #(state, [
-          JoinReply(player:, reply_to:, result: Joined(Error(AlreadyLoggedIn))),
-        ])
+    Join(name, pid, at, reply_to) -> {
+      // Names are compared case-insensitively, so "Alice" and "alice" are the
+      // same player as far as the game is concerned.
+      let name = string.lowercase(name)
+      case dict.get(state.rooms, at), dict.get(state.players, name) {
         Error(_), _ -> #(state, [
-          JoinReply(player:, reply_to:, result: Joined(Error(NoSuchRoom))),
+          JoinReply(reply_to, Joined(Error(NoSuchRoom))),
         ])
+        Ok(_), Ok(_) -> #(state, [
+          JoinReply(reply_to, Joined(Error(AlreadyLoggedIn))),
+        ])
+        Ok(room), Error(_) -> #(
+          State(..state, players: dict.insert(state.players, name, pid)),
+          [JoinReply(reply_to, Joined(Ok(room))), Monitor(pid)],
+        )
       }
+    }
     Move(from, dir, reply_to) ->
       case resolve_direction(state.rooms, from, dir) {
         Ok(to_room) -> #(state, [
@@ -106,7 +109,7 @@ fn resolve_direction(
 
 fn run(action: Action) -> Nil {
   case action {
-    JoinReply(_player, reply_to, result) -> actor.send(reply_to, result)
+    JoinReply(reply_to, result) -> actor.send(reply_to, result)
     MoveReply(reply_to, result) -> actor.send(reply_to, result)
     Monitor(pid) -> {
       let _ = process.monitor(pid)
@@ -128,7 +131,7 @@ pub fn handle_message(
 
 pub fn join(
   world: process.Name(Message),
-  player: PlayerId,
+  name: String,
   pid: process.Pid,
   at: RoomId,
   reply_to: Subject(Reply),
@@ -137,7 +140,7 @@ pub fn join(
     Ok(_pid) ->
       actor.send(
         process.named_subject(world),
-        Join(player:, pid:, at:, reply_to:),
+        Join(name:, pid:, at:, reply_to:),
       )
     Error(_) -> Nil
   }

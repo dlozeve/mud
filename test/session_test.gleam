@@ -55,7 +55,7 @@ pub fn take_lines_utf8_split_across_chunks_test() {
 fn room_info(name: String) -> room.Def {
   room.Def(
     process_name: process.new_name(name),
-    id: id.new_room_id(name),
+    id: id.new_room_id(),
     name: name,
     description: name <> " description",
     exits: dict.new(),
@@ -74,7 +74,7 @@ fn state_with_world(
     subject: process.new_subject(),
     replies: process.new_subject(),
     world: world_name,
-    entrance: id.new_room_id("entrance"),
+    entrance: id.new_room_id(),
     status: status,
     buffer: <<>>,
     room_watch: None,
@@ -86,7 +86,7 @@ fn awaiting_name_state() -> session.State {
 }
 
 fn joining_state() -> session.State {
-  state_with(session.Joining(id.new_player_id("alice"), "Alice"))
+  state_with(session.Joining("Alice"))
 }
 
 fn in_game_state() -> session.State {
@@ -96,7 +96,7 @@ fn in_game_state() -> session.State {
 fn in_room_state(room: room.Def) -> session.State {
   let world_name = process.new_name("world")
   let player_state =
-    player.State(id: id.new_player_id("alice"), name: "Alice", room: room)
+    player.State(pid: process.self(), name: "Alice", room: room)
   state_with_world(world_name, session.InGame(player_state))
 }
 
@@ -111,7 +111,7 @@ pub fn started_test() {
   let subject = process.new_subject()
   let replies = process.new_subject()
   let world = process.new_name("world")
-  let entrance = id.new_room_id("entrance")
+  let entrance = id.new_room_id()
   let #(state, effects) = session.started(subject, replies, world, entrance)
   assert effects
     == [session.Do(player.Output("Welcome to the dungeon! What is your name?"))]
@@ -128,8 +128,8 @@ pub fn receive_bytes_awaiting_name_test() {
 
   // The session no longer knows the room: the world answers the Join.
   assert effects == [session.Join(state.entrance)]
-  assert new_state.status
-    == session.Joining(id: id.new_player_id("alice"), name: "Alice")
+  let assert session.Joining(name) = new_state.status
+  assert name == "Alice"
 }
 
 pub fn receive_bytes_invalid_name_too_long_test() {
@@ -245,7 +245,7 @@ pub fn receive_message_stale_room_test() {
   let state = in_game_state()
   assert session.receive_message(
       state,
-      session.RoomMessage(id.new_room_id("somewhere else"), event.YouSaid("hi")),
+      session.RoomMessage(id.new_room_id(), event.YouSaid("hi")),
     )
     |> effects
     == []
@@ -284,12 +284,9 @@ pub fn join_reply_starts_the_game_test() {
     )
 
   assert effects == [session.EnterRoom(entrance, 0)]
-  assert new_state.status
-    == session.InGame(player.State(
-      id: id.new_player_id("alice"),
-      name: "Alice",
-      room: entrance,
-    ))
+  let assert session.InGame(player.State(_pid, name, room)) = new_state.status
+  assert name == "Alice"
+  assert room == entrance
 }
 
 pub fn join_reply_when_already_in_game_is_ignored_test() {
@@ -370,12 +367,9 @@ pub fn move_reply_relocates_the_player_test() {
       session.LeaveRoom(entrance.process_name),
       session.EnterRoom(corridor, 0),
     ]
-  assert new_state.status
-    == session.InGame(player.State(
-      id: id.new_player_id("alice"),
-      name: "Alice",
-      room: corridor,
-    ))
+  let assert session.InGame(player.State(_pid, name, room)) = new_state.status
+  assert name == "Alice"
+  assert room == corridor
 }
 
 pub fn move_reply_from_a_stale_room_is_ignored_test() {
@@ -578,6 +572,6 @@ pub fn to_session_test() {
   let s = in_game_state()
   let assert session.InGame(player_state) = s.status
   let sess = session.to_session(process.new_subject(), player_state)
-  assert sess.id == player_state.id
+  assert sess.pid == player_state.pid
   assert sess.name == player_state.name
 }

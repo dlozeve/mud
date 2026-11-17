@@ -7,7 +7,7 @@ import gleam/result
 import gleam/string
 import mud/command
 import mud/event.{type RoomEvent}
-import mud/id.{type PlayerId, type RoomId}
+import mud/id.{type RoomId}
 import mud/player
 import mud/room
 import mud/world
@@ -28,7 +28,7 @@ pub type State {
 
 pub type Status {
   AwaitingName
-  Joining(id: PlayerId, name: String)
+  Joining(name: String)
   InGame(player: player.State)
 }
 
@@ -83,7 +83,7 @@ pub fn started(
 pub fn closed(state: State) -> List(Effect) {
   case state.status {
     AwaitingName -> []
-    Joining(_, _) -> []
+    Joining(_) -> []
     InGame(player_state) -> [LeaveRoom(player_state.room.process_name)]
   }
 }
@@ -116,14 +116,12 @@ fn handle_line(state: State, line: String) -> #(State, List(Effect)) {
     AwaitingName -> {
       case valid_name(line) {
         Error(_) -> #(state, [Do(player.Output("Invalid name, try again:"))])
-        Ok(name) -> {
-          let new_status =
-            Joining(id.new_player_id(string.lowercase(name)), name)
-          #(State(..state, status: new_status), [Join(state.entrance)])
-        }
+        Ok(name) -> #(State(..state, status: Joining(name)), [
+          Join(state.entrance),
+        ])
       }
     }
-    Joining(_, _) -> #(state, [])
+    Joining(_) -> #(state, [])
     InGame(player_state) ->
       case command.parse(line) {
         command.Quit -> #(state, [
@@ -181,11 +179,11 @@ pub fn receive_message(
         // Message from a stale room that has not updated its occupancy, ignored.
         InGame(_) -> #(state, [])
         AwaitingName -> #(state, [])
-        Joining(_, _) -> #(state, [])
+        Joining(_) -> #(state, [])
       }
     JoinTimeout ->
       case state.status {
-        Joining(_, _) -> #(State(..state, status: AwaitingName), [
+        Joining(_) -> #(State(..state, status: AwaitingName), [
           Do(player.Output("The world is not answering, try again: ")),
         ])
         _ -> #(state, [])
@@ -218,8 +216,8 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
   case reply {
     world.Joined(Ok(room)) ->
       case state.status {
-        Joining(id:, name:) -> {
-          let player_state = player.State(id:, name:, room:)
+        Joining(name:) -> {
+          let player_state = player.State(pid: process.self(), name:, room:)
           #(State(..state, status: InGame(player_state)), [
             EnterRoom(room, attempt: 0),
           ])
@@ -229,7 +227,7 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
       }
     world.Joined(Error(join_error)) ->
       case state.status {
-        Joining(_, _) -> join_failed(state, join_error)
+        Joining(_) -> join_failed(state, join_error)
         _ -> #(state, [])
       }
     world.Moved(from, Ok(to_room)) ->
@@ -358,9 +356,8 @@ pub fn to_session(
   player_state: player.State,
 ) -> event.Session {
   event.Session(
-    player_state.id,
-    player_state.name,
-    process.self(),
-    to_listener(player),
+    name: player_state.name,
+    pid: player_state.pid,
+    listener: to_listener(player),
   )
 }

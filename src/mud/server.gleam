@@ -89,10 +89,10 @@ fn run_effects(
     [session.Stop, ..] -> Error(Requested)
     [session.Join(to_room_id), ..rest] ->
       case state.status {
-        session.Joining(player_id, _player_name) -> {
+        session.Joining(player_name) -> {
           world.join(
             state.world,
-            player_id,
+            player_name,
             process.self(),
             to_room_id,
             state.replies,
@@ -136,7 +136,7 @@ fn run_effects(
     [session.LeaveRoom(room_name), ..rest] ->
       case state.status {
         session.InGame(player_state) -> {
-          room.leave(room_name, player_state.id)
+          room.leave(room_name, player_state.pid)
           run_effects(state, conn, rest)
         }
         _ -> run_effects(state, conn, rest)
@@ -158,7 +158,7 @@ fn run_effect(
     player.Output(text) -> write(state, conn, text)
     player.Say(line) ->
       with_player(state, action, fn(player) {
-        room.say(player.room.process_name, player.id, line)
+        room.say(player.room.process_name, player.pid, line)
         Ok(state)
       })
     player.Move(dir) ->
@@ -170,7 +170,7 @@ fn run_effect(
       })
     player.Look ->
       with_player(state, action, fn(player) {
-        room.look(player.room.process_name, player.id)
+        room.look(player.room.process_name, player.pid)
         Ok(state)
       })
   }
@@ -221,7 +221,7 @@ fn write(
 fn current_player(state: session.State) -> Option(player.State) {
   case state.status {
     session.AwaitingName -> None
-    session.Joining(_, _) -> None
+    session.Joining(_) -> None
     session.InGame(player) -> Some(player)
   }
 }
