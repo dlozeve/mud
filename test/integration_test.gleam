@@ -278,3 +278,99 @@ pub fn two_clients_move_and_say_test() {
 
   stop_world(world)
 }
+
+// ----- T2: restarts ----------------------------------------------------
+
+pub fn room_restart_reenters_test() {
+  let world = start_world()
+  let alice = start_client(world, 1)
+  let bob = start_client(world, 2)
+
+  expect_output(alice, welcome)
+  expect_output(bob, welcome)
+
+  send_line(alice, "Alice")
+  expect_output(alice, you_are_in(world.entrance))
+
+  send_line(bob, "Bob")
+  expect_output(bob, you_are_in(world.entrance))
+  expect_output(alice, "Bob arrives.")
+
+  // Put the players in different rooms so that each re-entry is independent.
+  send_line(bob, "go north")
+  expect_output(bob, you_are_in(world.corridor))
+  expect_output(alice, "Bob leaves.")
+
+  // Kill the entrance: Alice is told it went down, waits for the supervisor
+  // to restart it, and enters the new incarnation.
+  let assert Ok(old_entrance) = process.named(world.entrance.process_name)
+  process.kill(old_entrance)
+  expect_output(alice, you_are_in(world.entrance))
+  let assert Ok(new_entrance) = process.named(world.entrance.process_name)
+  assert new_entrance != old_entrance
+
+  // Bob was in the corridor and must not be disturbed by the entrance restart.
+  send_line(bob, "look")
+  expect_output(bob, you_are_in(world.corridor))
+  expect_no_output(bob)
+
+  let assert Ok(old_corridor) = process.named(world.corridor.process_name)
+  process.kill(old_corridor)
+  expect_output(bob, you_are_in(world.corridor))
+  let assert Ok(new_corridor) = process.named(world.corridor.process_name)
+  assert new_corridor != old_corridor
+
+  send_line(alice, "look")
+  expect_output(alice, you_are_in(world.entrance))
+  expect_no_output(alice)
+
+  // The new incarnations accepted them back as occupants.
+  send_line(alice, "say hi")
+  expect_output(alice, "You say: hi")
+  send_line(bob, "say hi")
+  expect_output(bob, "You say: hi")
+
+  send_line(alice, "quit")
+  expect_stopped(alice)
+  send_line(bob, "quit")
+  expect_stopped(bob)
+
+  stop_world(world)
+}
+
+pub fn world_down_reports_and_session_drops_cleanly_test() {
+  let world = start_world()
+  let alice = start_client(world, 1)
+  let bob = start_client(world, 2)
+
+  expect_output(alice, welcome)
+  expect_output(bob, welcome)
+
+  send_line(alice, "Alice")
+  expect_output(alice, you_are_in(world.entrance))
+
+  send_line(bob, "Bob")
+  expect_output(bob, you_are_in(world.entrance))
+  expect_output(alice, "Bob arrives.")
+
+  // The world is not supervised in this harness, so taking it down keeps it
+  // down instead of racing a restart.
+  process.unlink(world.world_pid)
+  process.kill(world.world_pid)
+
+  send_line(alice, "go north")
+  expect_output(alice, "The world is restarting, try again.")
+
+  // The room is still up, so looking and leaving the game still work.
+  send_line(alice, "look")
+  expect_output(alice, you_are_in(world.entrance))
+  expect_no_output(bob)
+
+  send_line(alice, "quit")
+  expect_stopped(alice)
+  expect_output(bob, "Alice leaves.")
+  send_line(bob, "quit")
+  expect_stopped(bob)
+
+  stop_world(world)
+}
