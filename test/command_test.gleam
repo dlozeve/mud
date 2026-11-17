@@ -22,7 +22,7 @@ pub fn empty_test() {
 }
 
 pub fn whitespace_only_test() {
-  assert command.parse("   \t  \n  ") == command.Unknown("   \t  \n  ")
+  assert command.parse("   \t  \n  ") == command.Unknown("")
 }
 
 pub fn unknown_test() {
@@ -38,5 +38,9 @@ pub fn go_unknown_direction_test() {
 }
 
 pub fn go_no_direction_test() {
-  assert command.parse("go ") == command.Unknown("go ")
+  assert command.parse("go ") == command.MissingDirection
+}
+
+pub fn split_whitespace_test() {
+  assert command.parse("Go\t\r   \n NORTH \r\n") == command.Go(direction.North)
 }

@@ -35,6 +35,7 @@ pub fn decide_command(
     command.Look -> #(state, [Look])
     command.Quit -> #(state, [])
     command.BadDirection(dir) -> #(state, [Output("Unknown direction: " <> dir)])
+    command.MissingDirection -> #(state, [Output("Go where?")])
     command.Unknown(line) -> #(state, [Output("Unknown command: " <> line)])
   }
 }
