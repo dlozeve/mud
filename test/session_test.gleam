@@ -132,10 +132,32 @@ pub fn receive_bytes_awaiting_name_test() {
     == session.Joining(id: id.new_player_id("alice"), name: "Alice")
 }
 
-pub fn receive_bytes_invalid_name_test() {
+pub fn receive_bytes_invalid_name_too_long_test() {
   let state = awaiting_name_state()
   let #(new_state, effects) =
     session.receive_bytes(state, <<"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n">>)
+  assert effects == [session.Do(player.Output("Invalid name, try again:"))]
+  assert new_state.status == session.AwaitingName
+}
+
+pub fn receive_bytes_invalid_name_bad_characters_test() {
+  let state = awaiting_name_state()
+  let #(new_state, effects) =
+    session.receive_bytes(state, <<"hello, world!\n">>)
+  assert effects == [session.Do(player.Output("Invalid name, try again:"))]
+  assert new_state.status == session.AwaitingName
+}
+
+pub fn receive_bytes_invalid_name_alphanumeric_only_test() {
+  let state = awaiting_name_state()
+  let #(new_state, effects) = session.receive_bytes(state, <<"_Alice_\n">>)
+  assert effects == [session.Do(player.Output("Invalid name, try again:"))]
+  assert new_state.status == session.AwaitingName
+}
+
+pub fn receive_bytes_invalid_name_forbidden_test() {
+  let state = awaiting_name_state()
+  let #(new_state, effects) = session.receive_bytes(state, <<"QUIT\n">>)
   assert effects == [session.Do(player.Output("Invalid name, try again:"))]
   assert new_state.status == session.AwaitingName
 }

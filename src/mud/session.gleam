@@ -2,6 +2,7 @@ import gleam/bit_array
 import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/regexp
 import gleam/result
 import gleam/string
 import mud/command
@@ -139,10 +140,16 @@ fn handle_line(state: State, line: String) -> #(State, List(Effect)) {
 }
 
 fn valid_name(line: String) -> Result(String, Nil) {
-  case string.length(line) {
-    0 -> Error(Nil)
-    n if n > 32 -> Error(Nil)
-    _ -> Ok(line)
+  let assert Ok(re) =
+    regexp.from_string("^[a-zA-Z][a-zA-Z0-9_-]{0,30}[a-zA-Z0-9]$")
+  case regexp.check(line, with: re) {
+    True ->
+      case command.parse(line) {
+        command.Unknown(_) -> Ok(line)
+        // Valid commands are not valid names
+        _ -> Error(Nil)
+      }
+    False -> Error(Nil)
   }
 }
 
