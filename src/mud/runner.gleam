@@ -19,11 +19,34 @@ pub type StopReason(reason) {
 pub type Sender(reason) =
   fn(String) -> Result(Nil, reason)
 
+// Schedules a message back to the session after a delay. The default uses a
+// real timer; tests record the schedule instead of waiting for it.
+pub type Scheduler =
+  fn(process.Subject(session.Message), Int, session.Message) -> Nil
+
 // ----- Execution --------------------------------------------------------
+
+pub fn process_scheduler(
+  subject: process.Subject(session.Message),
+  delay: Int,
+  message: session.Message,
+) -> Nil {
+  let _ = process.send_after(subject, delay, message)
+  Nil
+}
 
 pub fn run_effects(
   state: session.State,
   send: Sender(reason),
+  effects: List(session.Effect),
+) -> Result(session.State, StopReason(reason)) {
+  run_effects_with(state, send, process_scheduler, effects)
+}
+
+pub fn run_effects_with(
+  state: session.State,
+  send: Sender(reason),
+  schedule: Scheduler,
   effects: List(session.Effect),
 ) -> Result(session.State, StopReason(reason)) {
   case effects {
@@ -39,13 +62,13 @@ pub fn run_effects(
             to_room_id,
             state.replies,
           )
-          let _ = process.send_after(state.subject, 5000, session.JoinTimeout)
-          run_effects(state, send, rest)
+          schedule(state.subject, 5000, session.JoinTimeout)
+          run_effects_with(state, send, schedule, rest)
         }
         // A join request is only meaningful while a name is being claimed.
         session.AwaitingName | session.InGame(_) -> {
           skip_effect("a join request outside the Joining state")
-          run_effects(state, send, rest)
+          run_effects_with(state, send, schedule, rest)
         }
       }
     [session.EnterRoom(to_room, attempt), ..rest] ->
@@ -59,30 +82,30 @@ pub fn run_effects(
           room.enter(to_room.process_name, session.to_occupant(state, player))
           let room_watch =
             Some(session.RoomWatch(pid: pid, monitor: process.monitor(pid)))
-          run_effects(session.State(..state, room_watch:), send, rest)
+          run_effects_with(
+            session.State(..state, room_watch:),
+            send,
+            schedule,
+            rest,
+          )
         }
         session.InGame(_), Error(_) -> {
-          let _ =
-            process.send_after(
-              state.subject,
-              100,
-              session.RetryEnter(to_room, attempt + 1),
-            )
-          run_effects(state, send, rest)
+          schedule(state.subject, 100, session.RetryEnter(to_room, attempt + 1))
+          run_effects_with(state, send, schedule, rest)
         }
-        _, _ -> run_effects(state, send, rest)
+        _, _ -> run_effects_with(state, send, schedule, rest)
       }
     [session.LeaveRoom(room_name), ..rest] ->
       case state.status {
         session.InGame(player_state) -> {
           room.leave(room_name, player_state.pid)
-          run_effects(state, send, rest)
+          run_effects_with(state, send, schedule, rest)
         }
-        _ -> run_effects(state, send, rest)
+        _ -> run_effects_with(state, send, schedule, rest)
       }
     [session.Do(action), ..rest] ->
       case run_effect(state, send, action) {
-        Ok(new_state) -> run_effects(new_state, send, rest)
+        Ok(new_state) -> run_effects_with(new_state, send, schedule, rest)
         Error(e) -> Error(e)
       }
   }
