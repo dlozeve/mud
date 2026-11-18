@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/erlang/process
 import gleam/int
 import gleam/list
@@ -31,6 +32,7 @@ pub fn decide_command(
   command: Command,
 ) -> #(State, List(Action)) {
   case command {
+    command.Help -> #(state, [Output(help())])
     command.Say(line) -> #(state, [Say(line)])
     command.Go(dir) -> #(state, [Move(dir)])
     command.Look -> #(state, [Look])
@@ -92,5 +94,52 @@ fn describe_occupants(names: List(String)) -> String {
       let #(front, tail) = list.split(names, n - 1)
       string.join(front, ", ") <> " and " <> string.concat(tail) <> " are here."
     }
+  }
+}
+
+fn help() -> String {
+  let commands =
+    dict.from_list([
+      #("help", "Display this help"),
+      #("say <message>", "Talk to other players in the room"),
+      #("go north/south/east/west (or n/s/e/w)", "Go through a door"),
+      #("look", "Look around you"),
+      #("who", "Who is here?"),
+      #("quit", "Quit the dungeon"),
+    ])
+  let assert Ok(max_length) =
+    dict.keys(commands) |> list.map(string.length) |> list.max(int.compare)
+  dict.map_values(commands, fn(cmd, desc) {
+    string.pad_end(cmd, to: max_length, with: " ") <> "\t" <> desc
+  })
+  |> dict.values
+  |> list.prepend("Available commands:")
+  |> boxed(title: "Help")
+}
+
+fn boxed(lines: List(String), title title: String) -> String {
+  let max_length = list.map(lines, string.length) |> list.max(int.compare)
+  let title_length = string.length(title)
+  let header_line = case max_length, title {
+    Ok(n), "" -> "┌" <> string.repeat("─", n + 2) <> "┐"
+    Ok(n), title ->
+      "┌"
+      <> string.repeat("─", { n - title_length } / 2)
+      <> " "
+      <> title
+      <> " "
+      <> string.repeat("─", { n - title_length } / 2 + { n - title_length } % 2)
+      <> "┐"
+    Error(_), _ -> ""
+  }
+  case max_length {
+    Ok(n) -> {
+      let padded_lines =
+        list.map(lines, string.pad_end(_, to: n, with: " "))
+        |> string.join(" │\n│ ")
+      let footer_line = "└" <> string.repeat("─", n + 2) <> "┘"
+      header_line <> "\n" <> "│ " <> padded_lines <> " │\n" <> footer_line
+    }
+    Error(_) -> ""
   }
 }

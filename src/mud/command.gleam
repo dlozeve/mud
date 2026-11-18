@@ -3,6 +3,7 @@ import gleam/string
 import mud/direction.{type Direction}
 
 pub type Command {
+  Help
   Say(String)
   Go(Direction)
   Look
@@ -20,6 +21,7 @@ pub fn parse(line: String) -> Command {
     [] -> Unknown("")
     [verb, ..rest] ->
       case string.lowercase(verb), rest {
+        "help", _ | "?", _ -> Help
         "say", rest -> Say(string.join(rest, " "))
         "go", [] -> MissingDirection
         "go", [dir, ..] ->
