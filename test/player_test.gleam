@@ -45,6 +45,19 @@ pub fn render_say_to_other_test() {
   assert player.render(event.PlayerSaid("Alice", "hi")) == "Alice says: hi"
 }
 
+pub fn render_occupant_list_test() {
+  assert player.render(event.OccupantList(["Alice", "Bob"]))
+    == "Alice and Bob are here."
+}
+
+pub fn render_occupant_list_single_test() {
+  assert player.render(event.OccupantList(["Alice"])) == "Alice is here."
+}
+
+pub fn render_occupant_list_alone_test() {
+  assert player.render(event.OccupantList([])) == "You are alone here."
+}
+
 fn room() -> room.Def {
   room.Def(
     process_name: process.new_name("room"),

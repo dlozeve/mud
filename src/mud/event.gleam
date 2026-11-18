@@ -6,4 +6,5 @@ pub type RoomEvent {
   PlayerLeft(player_name: String)
   YouSaid(text: String)
   PlayerSaid(player_name: String, text: String)
+  OccupantList(names: List(String))
 }

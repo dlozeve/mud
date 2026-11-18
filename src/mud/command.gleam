@@ -6,6 +6,7 @@ pub type Command {
   Say(String)
   Go(Direction)
   Look
+  WhoIsHere
   Quit
   BadDirection(String)
   MissingDirection
@@ -27,6 +28,7 @@ pub fn parse(line: String) -> Command {
             Error(s) -> BadDirection(s)
           }
         "look", _ -> Look
+        "who", _ -> WhoIsHere
         "q", _ | "quit", _ -> Quit
         _, _ -> Unknown(line)
       }

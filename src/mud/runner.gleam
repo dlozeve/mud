@@ -135,6 +135,11 @@ fn run_effect(
         room.look(player.room.process_name, player.pid)
         Ok(state)
       })
+    player.WhoIsHere ->
+      with_player(state, action, fn(player) {
+        room.who_is_here(player.room.process_name, player.pid)
+        Ok(state)
+      })
   }
 }
 

@@ -58,6 +58,7 @@ pub type Message {
   Enter(occupant: Occupant)
   Leave(pid: process.Pid)
   Look(pid: process.Pid)
+  WhoIsHere(pid: process.Pid)
   Say(speaker: process.Pid, text: String)
   Down(pid: Option(process.Pid))
 }
@@ -104,6 +105,20 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
     Look(pid) ->
       case dict.get(state.occupants, pid) {
         Ok(_) -> #(state, [Tell(pid, you_are_in(state))])
+        Error(_) -> #(state, [])
+      }
+    WhoIsHere(pid) ->
+      case dict.get(state.occupants, pid) {
+        Ok(_) -> #(state, [
+          Tell(
+            pid,
+            event.OccupantList(
+              dict.delete(state.occupants, pid)
+              |> dict.map_values(fn(_, occupant) { occupant.name })
+              |> dict.values,
+            ),
+          ),
+        ])
         Error(_) -> #(state, [])
       }
     Say(speaker, text) -> {
@@ -211,6 +226,13 @@ pub fn leave(room_name: process.Name(Message), pid: process.Pid) -> Nil {
 pub fn look(room_name: process.Name(Message), pid: process.Pid) -> Nil {
   case checked_named_subject(room_name) {
     Ok(subject) -> actor.send(subject, Look(pid:))
+    Error(_) -> Nil
+  }
+}
+
+pub fn who_is_here(room_name: process.Name(Message), pid: process.Pid) -> Nil {
+  case checked_named_subject(room_name) {
+    Ok(subject) -> actor.send(subject, WhoIsHere(pid:))
     Error(_) -> Nil
   }
 }

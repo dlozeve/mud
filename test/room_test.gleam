@@ -191,3 +191,14 @@ pub fn you_are_in_lists_exits_in_a_fixed_order_test() {
       ),
     ]
 }
+
+pub fn who_is_here_test() {
+  let alice = occupant_with("Alice")
+  let bob = occupant_with("Bob")
+  let carol = occupant_with("Carol")
+  let state = state_with([alice, bob, carol])
+  let #(_, actions) = room.decide(state, room.WhoIsHere(carol.pid))
+  let assert [room.Tell(pid, event.OccupantList(names:))] = actions
+  assert pid == carol.pid
+  assert set.from_list(names) == set.from_list([alice.name, bob.name])
+}

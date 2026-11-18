@@ -44,3 +44,7 @@ pub fn go_no_direction_test() {
 pub fn split_whitespace_test() {
   assert command.parse("Go\t\r   \n NORTH \r\n") == command.Go(direction.North)
 }
+
+pub fn who_test() {
+  assert command.parse("Who is here?") == command.WhoIsHere
+}

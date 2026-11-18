@@ -20,6 +20,7 @@ pub type Action {
   Say(String)
   Move(Direction)
   Look
+  WhoIsHere
 }
 
 // ----- Logic ------------------------------------------------------------
@@ -33,6 +34,7 @@ pub fn decide_command(
     command.Say(line) -> #(state, [Say(line)])
     command.Go(dir) -> #(state, [Move(dir)])
     command.Look -> #(state, [Look])
+    command.WhoIsHere -> #(state, [WhoIsHere])
     command.Quit -> #(state, [])
     command.BadDirection(dir) -> #(state, [Output("Unknown direction: " <> dir)])
     command.MissingDirection -> #(state, [Output("Go where?")])
@@ -58,6 +60,7 @@ pub fn render(room_event: event.RoomEvent) -> String {
     event.PlayerLeft(player_name) -> player_name <> " leaves."
     event.YouSaid(text) -> "You say: " <> text
     event.PlayerSaid(player_name, text) -> player_name <> " says: " <> text
+    event.OccupantList(names) -> describe_occupants(names)
   }
 }
 
@@ -76,6 +79,18 @@ fn describe_exits(exits: List(Direction)) -> String {
       <> " and "
       <> string.concat(tail)
       <> "."
+    }
+  }
+}
+
+fn describe_occupants(names: List(String)) -> String {
+  case names {
+    [] -> "You are alone here."
+    [a] -> a <> " is here."
+    names -> {
+      let n = list.length(names)
+      let #(front, tail) = list.split(names, n - 1)
+      string.join(front, ", ") <> " and " <> string.concat(tail) <> " are here."
     }
   }
 }
