@@ -38,8 +38,8 @@ type World {
 }
 
 fn start_world() -> World {
-  let entrance_id = room.new_id()
-  let corridor_id = room.new_id()
+  let entrance_id = room.new_id("entrance")
+  let corridor_id = room.new_id("corridor")
   let entrance =
     room.Def(
       process_name: process.new_name("entrance"),

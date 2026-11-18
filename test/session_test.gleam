@@ -54,7 +54,7 @@ pub fn take_lines_utf8_split_across_chunks_test() {
 fn room_info(name: String) -> room.Def {
   room.Def(
     process_name: process.new_name(name),
-    id: room.new_id(),
+    id: room.new_id(name),
     name: name,
     description: name <> " description",
     exits: dict.new(),
@@ -73,7 +73,7 @@ fn state_with_world(
     subject: process.new_subject(),
     replies: process.new_subject(),
     world: world_name,
-    entrance: room.new_id(),
+    entrance: room.new_id("entrance"),
     status: status,
     buffer: <<>>,
     room_watch: None,
@@ -110,7 +110,7 @@ pub fn started_test() {
   let subject = process.new_subject()
   let replies = process.new_subject()
   let world = process.new_name("world")
-  let entrance = room.new_id()
+  let entrance = room.new_id("entrance")
   let #(state, effects) = session.started(subject, replies, world, entrance)
   assert effects
     == [session.Do(player.Output("Welcome to the dungeon! What is your name?"))]
@@ -244,7 +244,7 @@ pub fn receive_message_stale_room_test() {
   let state = in_game_state()
   assert session.receive_message(
       state,
-      session.RoomMessage(room.new_id(), event.YouSaid("hi")),
+      session.RoomMessage(room.new_id("stale room"), event.YouSaid("hi")),
     )
     |> effects
     == []

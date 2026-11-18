@@ -1,0 +1,16 @@
+entrance = "entrance"
+
+[[rooms]]
+id = "entrance"
+name = "the dungeon entrance"
+description = "The bottom of an enormous stone staircase. Dark and ominous. Slow rumble coming from below."
+[rooms.exits]
+north = "corridor"
+
+
+[[rooms]]
+id = "corridor"
+name = "a dimly-lit corridor"
+description = "Long and narrow, with a few torches on the walls. Damp."
+[rooms.exits]
+south = "entrance"

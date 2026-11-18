@@ -5,16 +5,15 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import mud/direction.{type Direction}
 import mud/event
-import youid/uuid
 
 // ----- Identity and handles ---------------------------------------------
 
 pub opaque type Id {
-  Id(uuid.Uuid)
+  Id(String)
 }
 
-pub fn new_id() -> Id {
-  Id(uuid.v7())
+pub fn new_id(name: String) -> Id {
+  Id(name)
 }
 
 // A room's view of one player: the name for display, the pid that identifies

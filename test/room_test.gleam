@@ -16,7 +16,7 @@ fn state_with(occupants: List(room.Occupant)) -> room.State {
   room.State(
     def: room.Def(
       process_name: process.new_name("r1"),
-      id: room.new_id(),
+      id: room.new_id("r1"),
       name: "room",
       description: "room description",
       exits: dict.new(),
@@ -165,12 +165,12 @@ pub fn you_are_in_lists_exits_in_a_fixed_order_test() {
   let def =
     room.Def(
       process_name: process.new_name("r1"),
-      id: room.new_id(),
+      id: room.new_id("r1"),
       name: "room",
       description: "room description",
       exits: dict.from_list([
-        #(direction.West, room.new_id()),
-        #(direction.North, room.new_id()),
+        #(direction.West, room.new_id("r2")),
+        #(direction.North, room.new_id("r3")),
       ]),
     )
   let state = room.State(def:, occupants: dict.new())

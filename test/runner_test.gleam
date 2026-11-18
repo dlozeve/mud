@@ -11,7 +11,7 @@ import mud/session
 fn room_def(name: String) -> room.Def {
   room.Def(
     process_name: process.new_name(name),
-    id: room.new_id(),
+    id: room.new_id(name),
     name: name,
     description: name <> " description",
     exits: dict.new(),
@@ -23,7 +23,7 @@ fn state_with(status: session.Status) -> session.State {
     subject: process.new_subject(),
     replies: process.new_subject(),
     world: process.new_name("world"),
-    entrance: room.new_id(),
+    entrance: room.new_id("entrance"),
     status: status,
     buffer: <<>>,
     room_watch: None,
@@ -144,7 +144,10 @@ pub fn join_schedules_a_timeout_test() {
       state,
       recording_sender(sent),
       recording_scheduler(scheduled),
-      [session.Join(room.new_id()), session.Do(player.Output("after"))],
+      [
+        session.Join(room.new_id("entrance")),
+        session.Do(player.Output("after")),
+      ],
     )
 
   assert is_ok(result)
