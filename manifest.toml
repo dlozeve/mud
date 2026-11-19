@@ -18,6 +18,7 @@ packages = [
   { name = "logging", version = "1.5.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "logging", source = "hex", outer_checksum = "BC5F18CE5DD9686100229FE5409BDC3DD5C46D5A7DF2F804AD2D8F0DD6C5060E" },
   { name = "simplifile", version = "2.7.0", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "A2727627B063E87351934C7F7F008F2D1FDB16F6DE0B8C79F9E46459CFC9C164" },
   { name = "tom", version = "2.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "gleam_time"], otp_app = "tom", source = "hex", outer_checksum = "DCF04CB7AB35D58CFC598C66EA2E1816D160759802C89B2BA6238780D59BC256" },
+  { name = "woof", version = "1.10.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "woof", source = "hex", outer_checksum = "EF4DA025F6434303D0A7A29AED6F1FC6760A64DC9F8EFAA505A3B3B1A0498479" },
 ]
 
 [requirements]
@@ -29,3 +30,4 @@ gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 glisten = { version = ">= 9.0.1 and < 10.0.0" }
 simplifile = { version = ">= 2.7.0 and < 3.0.0" }
 tom = { version = ">= 2.1.0 and < 3.0.0" }
+woof = { version = ">= 1.10.0 and < 2.0.0" }

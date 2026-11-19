@@ -5,7 +5,9 @@ import gleam/option.{None, Some}
 import gleam/set
 import mud/direction
 import mud/event
+import mud/log
 import mud/room
+import woof
 
 // Occupants are keyed by pid, so every test occupant needs its own.
 fn occupant_with(name: String) -> room.Occupant {
@@ -31,7 +33,7 @@ pub fn say_broadcast_test() {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let state = state_with([alice, bob])
-  let #(_state, actions) = room.decide(state, room.Say(alice.pid, "hi"))
+  let #(_state, actions, _logs) = room.decide(state, room.Say(alice.pid, "hi"))
   assert set.from_list(actions)
     == set.from_list([
       room.Tell(alice.pid, event.YouSaid("hi")),
@@ -44,7 +46,7 @@ pub fn enter_broadcast_test() {
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
   let state = state_with([alice, bob])
-  let #(new_state, actions) = room.decide(state, room.Enter(carol))
+  let #(new_state, actions, _logs) = room.decide(state, room.Enter(carol))
   assert set.from_list(actions)
     == set.from_list([
       room.Monitor(carol.pid),
@@ -70,7 +72,7 @@ pub fn leave_broadcast_test() {
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
   let state = state_with([alice, bob, carol])
-  let #(_state, actions) = room.decide(state, room.Leave(alice.pid))
+  let #(_state, actions, _logs) = room.decide(state, room.Leave(alice.pid))
   assert set.from_list(actions)
     == set.from_list([
       room.Tell(bob.pid, event.PlayerLeft(alice.name)),
@@ -83,7 +85,7 @@ pub fn say_non_occupant_test() {
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
   let state = state_with([alice, bob])
-  let #(_state, actions) = room.decide(state, room.Say(carol.pid, "hi"))
+  let #(_state, actions, _logs) = room.decide(state, room.Say(carol.pid, "hi"))
   assert actions == []
 }
 
@@ -92,7 +94,7 @@ pub fn leave_non_occupant_test() {
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
   let state = state_with([alice, bob])
-  let #(_state, actions) = room.decide(state, room.Leave(carol.pid))
+  let #(_state, actions, _logs) = room.decide(state, room.Leave(carol.pid))
   assert actions == []
 }
 
@@ -100,7 +102,7 @@ pub fn enter_twice_test() {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let state = state_with([alice, bob])
-  let #(new_state, actions) = room.decide(state, room.Enter(bob))
+  let #(new_state, actions, _logs) = room.decide(state, room.Enter(bob))
   assert actions == []
   assert dict.keys(state.occupants) == dict.keys(new_state.occupants)
 }
@@ -118,7 +120,8 @@ pub fn down_evicts_the_occupant_test() {
   let bob = occupant_with_pid("Bob", bob_pid)
   let state = state_with([alice, bob])
 
-  let #(new_state, actions) = room.decide(state, room.Down(Some(alice_pid)))
+  let #(new_state, actions, _logs) =
+    room.decide(state, room.Down(Some(alice_pid)))
 
   assert actions == [room.Tell(bob.pid, event.PlayerLeft(alice.name))]
   assert dict.has_key(new_state.occupants, bob.pid)
@@ -130,10 +133,10 @@ pub fn down_removes_a_dead_player_so_they_can_reenter_test() {
   let alice = occupant_with_pid("Alice", dead_pid)
   let state = state_with([alice])
 
-  let #(state, _) = room.decide(state, room.Down(Some(dead_pid)))
+  let #(state, _, _logs) = room.decide(state, room.Down(Some(dead_pid)))
 
   // The same id can enter again, which is what a reconnecting player does.
-  let #(new_state, actions) =
+  let #(new_state, actions, _logs) =
     room.decide(state, room.Enter(occupant_with_pid("Alice", process.self())))
   assert actions != []
   assert dict.size(new_state.occupants) == 1
@@ -144,7 +147,7 @@ pub fn down_of_an_unknown_process_is_ignored_test() {
   // one for the DOWN that should be ignored.
   let alice = occupant_with_pid("Alice", process.spawn(fn() { Nil }))
   let state = state_with([alice])
-  let #(new_state, actions) =
+  let #(new_state, actions, _logs) =
     room.decide(state, room.Down(Some(process.self())))
   assert actions == []
   assert new_state == state
@@ -155,7 +158,7 @@ pub fn down_of_none_is_ignored_test() {
   // one for the DOWN that should be ignored.
   let alice = occupant_with_pid("Alice", process.spawn(fn() { Nil }))
   let state = state_with([alice])
-  let #(new_state, actions) = room.decide(state, room.Down(None))
+  let #(new_state, actions, _logs) = room.decide(state, room.Down(None))
   assert actions == []
   assert new_state == state
 }
@@ -176,7 +179,7 @@ pub fn you_are_in_lists_exits_in_a_fixed_order_test() {
   let state = room.State(def:, occupants: dict.new())
   let alice = occupant_with("Alice")
 
-  let #(_state, actions) = room.decide(state, room.Enter(alice))
+  let #(_state, actions, _logs) = room.decide(state, room.Enter(alice))
 
   assert actions
     == [
@@ -197,8 +200,36 @@ pub fn who_is_here_test() {
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
   let state = state_with([alice, bob, carol])
-  let #(_, actions) = room.decide(state, room.WhoIsHere(carol.pid))
+  let #(_, actions, _logs) = room.decide(state, room.WhoIsHere(carol.pid))
   let assert [room.Tell(pid, event.OccupantList(names:))] = actions
   assert pid == carol.pid
   assert set.from_list(names) == set.from_list([alice.name, bob.name])
+}
+
+// ----- Logging -----------------------------------------------------------
+
+pub fn entering_twice_is_logged_as_a_warning_test() {
+  let alice = occupant_with("Alice")
+  let bob = occupant_with("Bob")
+  let state = state_with([alice, bob])
+
+  let #(_state, actions, logs) = room.decide(state, room.Enter(bob))
+
+  assert actions == []
+  let assert [log.Line(level: woof.Warning, message:, fields:)] = logs
+  assert message == "player already in room"
+  assert fields == [log.player_name("Bob"), log.player_pid(bob.pid)]
+}
+
+pub fn a_down_is_logged_before_the_leave_it_causes_test() {
+  let alice_pid = process.spawn(fn() { Nil })
+  let alice = occupant_with_pid("Alice", alice_pid)
+  let state = state_with([alice])
+
+  let #(_state, _actions, logs) = room.decide(state, room.Down(Some(alice_pid)))
+
+  let assert [
+    log.Line(message: "player process down", ..),
+    log.Line(message: "player left room", ..),
+  ] = logs
 }

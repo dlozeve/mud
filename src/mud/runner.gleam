@@ -1,11 +1,13 @@
 import gleam/erlang/process
-import gleam/io
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import mud/direction
+import mud/log
 import mud/player
 import mud/room
 import mud/session
 import mud/world
+import woof
 
 // ----- Effects ----------------------------------------------------------
 
@@ -49,9 +51,13 @@ pub fn run_effects_with(
   schedule: Scheduler,
   effects: List(session.Effect),
 ) -> Result(session.State, StopReason(reason)) {
+  let logger = player_logger(state)
   case effects {
     [] -> Ok(state)
-    [session.Stop, ..] -> Error(Requested)
+    [session.Stop, ..] -> {
+      logger |> woof.log(woof.Debug, "quitting", [])
+      Error(Requested)
+    }
     [session.Join(to_room_id), ..rest] ->
       case state.status {
         session.Joining(player_name) -> {
@@ -62,18 +68,24 @@ pub fn run_effects_with(
             to_room_id,
             state.replies,
           )
+          logger |> woof.log(woof.Info, "joining", [])
           schedule(state.subject, 5000, session.JoinTimeout)
           run_effects_with(state, send, schedule, rest)
         }
         // A join request is only meaningful while a name is being claimed.
         session.AwaitingName | session.InGame(_) -> {
-          skip_effect("a join request outside the Joining state")
+          skip_effect("join request outside the Joining state")
           run_effects_with(state, send, schedule, rest)
         }
       }
     [session.EnterRoom(to_room, attempt), ..rest] ->
       case state.status, process.named(to_room.process_name) {
         session.InGame(player), Ok(pid) -> {
+          logger
+          |> woof.log(woof.Info, "entering room", [
+            woof.str("to_room", room.id_to_string(to_room.id)),
+            woof.int("attempt", attempt),
+          ])
           case state.room_watch {
             Some(session.RoomWatch(_pid, monitor)) ->
               process.demonitor_process(monitor)
@@ -90,6 +102,11 @@ pub fn run_effects_with(
           )
         }
         session.InGame(_), Error(_) -> {
+          logger
+          |> woof.log(woof.Warning, "room process not found, retrying", [
+            woof.str("to_room", room.id_to_string(to_room.id)),
+            woof.int("attempt", attempt),
+          ])
           schedule(state.subject, 100, session.RetryEnter(to_room, attempt + 1))
           run_effects_with(state, send, schedule, rest)
         }
@@ -98,6 +115,7 @@ pub fn run_effects_with(
     [session.LeaveRoom(room_name), ..rest] ->
       case state.status {
         session.InGame(player_state) -> {
+          logger |> woof.log(woof.Info, "leaving room", [])
           room.leave(room_name, player_state.pid)
           run_effects_with(state, send, schedule, rest)
         }
@@ -116,15 +134,21 @@ fn run_effect(
   send: Sender(reason),
   action: player.Action,
 ) -> Result(session.State, StopReason(reason)) {
+  let logger = player_logger(state)
   case action {
     player.Output(text) -> write(state, send, text)
     player.Say(line) ->
       with_player(state, action, fn(player) {
+        logger |> woof.log(woof.Debug, "said", [woof.str("line", line)])
         room.say(player.room.process_name, player.pid, line)
         Ok(state)
       })
     player.Move(dir) ->
       with_player(state, action, fn(player) {
+        logger
+        |> woof.log(woof.Info, "moved", [
+          woof.str("direction", direction.render(dir)),
+        ])
         case world.move(state.world, player.room.id, dir, state.replies) {
           Ok(_) -> Ok(state)
           Error(_) -> write(state, send, "The world is restarting, try again.")
@@ -132,11 +156,13 @@ fn run_effect(
       })
     player.Look ->
       with_player(state, action, fn(player) {
+        logger |> woof.log(woof.Info, "looked", [])
         room.look(player.room.process_name, player.pid)
         Ok(state)
       })
     player.WhoIsHere ->
       with_player(state, action, fn(player) {
+        logger |> woof.log(woof.Info, "asked who is here", [])
         room.who_is_here(player.room.process_name, player.pid)
         Ok(state)
       })
@@ -164,8 +190,7 @@ fn skip_playerless_effect(
 }
 
 fn skip_effect(reason: String) -> Nil {
-  // TODO: replace with the `logging` package
-  io.println_error("skipping " <> reason)
+  woof.error("skipping effect", [woof.str("reason", reason)])
 }
 
 fn write(
@@ -184,5 +209,22 @@ fn current_player(state: session.State) -> Option(player.State) {
     session.AwaitingName -> None
     session.Joining(_) -> None
     session.InGame(player) -> Some(player)
+  }
+}
+
+/// The logger for one connection: status, and whatever is known about the
+/// player (name, pid, room). Public so the server can reuse it when it has a
+/// session state but no effect to run, such as on close or on a send failure.
+pub fn player_logger(state: session.State) -> woof.Logger {
+  case state.status {
+    session.AwaitingName -> log.player_logger("AwaitingName", [])
+    session.Joining(name:) ->
+      log.player_logger("Joining", [log.player_name(name)])
+    session.InGame(player:) ->
+      log.player_logger("InGame", [
+        log.pid(player.pid),
+        log.player_name(player.name),
+        log.room(room.id_to_string(player.room.id)),
+      ])
   }
 }

@@ -3,6 +3,7 @@ import gleam/erlang/process
 import gleam/option.{type Option, None, Some}
 import gleam/otp/static_supervisor
 import gleam/otp/supervision
+import gleam/string
 import glisten.{type Connection}
 import glisten/internal/listener
 import glisten/socket
@@ -11,20 +12,12 @@ import mud/room
 import mud/runner
 import mud/session
 import mud/world
+import woof
 
 // The listener is named explicitly so that callers can ask the OS which port
 // was assigned when starting on port 0.
 pub type Listener {
   Listener(name: process.Name(listener.Message))
-}
-
-pub fn server_child(
-  world: process.Name(world.Message),
-  entrance: room.Id,
-  port: Int,
-) -> supervision.ChildSpecification(static_supervisor.Supervisor) {
-  let #(child, _listener) = server_child_with_listener(world, entrance, port)
-  child
 }
 
 pub fn server_child_with_listener(
@@ -52,6 +45,14 @@ pub fn on_init(world: process.Name(world.Message), entrance: room.Id) {
     session.State,
     Option(process.Selector(session.Message)),
   ) {
+    case glisten.get_connection_info(conn) {
+      Ok(conn_info) ->
+        woof.debug("connection opened", [
+          woof.str("ip", glisten.ip_address_to_string(conn_info.ip_address)),
+        ])
+      Error(_) -> woof.warning("connection info unavailable", [])
+    }
+
     let subject = process.new_subject()
     let replies = process.new_subject()
     let selector =
@@ -84,7 +85,30 @@ fn loop(
   }
   case runner.run_effects(state, sender(Some(conn)), effects) {
     Ok(state) -> glisten.continue(state)
-    Error(_) -> glisten.stop()
+    Error(reason) -> {
+      let logger = runner.player_logger(state)
+      let connection_fields = case glisten.get_connection_info(conn) {
+        Ok(conn_info) -> [
+          woof.str(
+            "ip_address",
+            glisten.ip_address_to_string(conn_info.ip_address),
+          ),
+        ]
+        Error(_) -> []
+      }
+      case reason {
+        runner.Requested ->
+          logger
+          |> woof.log(woof.Debug, "client requested quit", connection_fields)
+        runner.SendFailed(reason) ->
+          logger
+          |> woof.log(woof.Warning, "send failed, disconnecting", [
+            woof.str("reason", string.inspect(reason)),
+            ..connection_fields
+          ])
+      }
+      glisten.stop()
+    }
   }
 }
 
@@ -92,6 +116,8 @@ fn on_close(state: session.State) {
   let _ =
     session.closed(state)
     |> runner.run_effects(state, sender(None), _)
+  runner.player_logger(state)
+  |> woof.log(woof.Debug, "connection closed by client", [])
   Nil
 }
 

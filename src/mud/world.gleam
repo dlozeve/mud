@@ -5,7 +5,9 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/string
 import mud/direction.{type Direction}
+import mud/log
 import mud/room
+import woof
 
 // ----- State ------------------------------------------------------------
 
@@ -49,39 +51,91 @@ pub type Action {
 
 // ----- Logic ------------------------------------------------------------
 
-pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
+pub fn decide(
+  state: State,
+  message: Message,
+) -> #(State, List(Action), List(log.Line)) {
   case message {
     Join(name, pid, at, reply_to) -> {
       // Names are compared case-insensitively, so "Alice" and "alice" are the
       // same player as far as the game is concerned.
       let name = string.lowercase(name)
       case dict.get(state.rooms, at), dict.get(state.players, name) {
-        Error(_), _ -> #(state, [
-          JoinReply(reply_to, Joined(Error(NoSuchRoom))),
-        ])
-        Ok(_), Ok(_) -> #(state, [
-          JoinReply(reply_to, Joined(Error(AlreadyLoggedIn))),
-        ])
-        Ok(room), Error(_) -> #(
-          State(..state, players: dict.insert(state.players, name, pid)),
-          [JoinReply(reply_to, Joined(Ok(room))), Monitor(pid)],
-        )
+        Error(_), _ -> {
+          let logs = [
+            log.Line(woof.Warning, "player could not join: no such room", [
+              log.player_name(name),
+              log.player_pid(pid),
+              log.room(room.id_to_string(at)),
+            ]),
+          ]
+          #(state, [JoinReply(reply_to, Joined(Error(NoSuchRoom)))], logs)
+        }
+        Ok(_), Ok(_) -> {
+          let logs = [
+            log.Line(woof.Warning, "player could not join: already logged in", [
+              log.player_name(name),
+              log.player_pid(pid),
+              log.room(room.id_to_string(at)),
+            ]),
+          ]
+          #(state, [JoinReply(reply_to, Joined(Error(AlreadyLoggedIn)))], logs)
+        }
+        Ok(room), Error(_) -> {
+          let logs = [
+            log.Line(woof.Debug, "player joining", [
+              log.player_name(name),
+              log.player_pid(pid),
+              log.room(room.id_to_string(room.id)),
+            ]),
+          ]
+          #(
+            State(..state, players: dict.insert(state.players, name, pid)),
+            [JoinReply(reply_to, Joined(Ok(room))), Monitor(pid)],
+            logs,
+          )
+        }
       }
     }
     Move(from, dir, reply_to) ->
       case resolve_direction(state.rooms, from, dir) {
-        Ok(to_room) -> #(state, [
-          MoveReply(reply_to, Moved(from:, result: Ok(to_room))),
-        ])
-        Error(error) -> #(state, [
-          MoveReply(reply_to, Moved(from:, result: Error(error))),
-        ])
+        Ok(to_room) -> {
+          let logs = [
+            log.Line(woof.Debug, "player moving", [
+              woof.str("from_room", room.id_to_string(from)),
+              woof.str("direction", direction.render(dir)),
+              woof.str("to_room", room.id_to_string(to_room.id)),
+            ]),
+          ]
+          #(
+            state,
+            [MoveReply(reply_to, Moved(from:, result: Ok(to_room)))],
+            logs,
+          )
+        }
+        Error(error) -> {
+          let logs = [
+            log.Line(woof.Warning, "player could not move", [
+              woof.str("from_room", room.id_to_string(from)),
+              woof.str("direction", direction.render(dir)),
+              woof.str("error", string.inspect(error)),
+            ]),
+          ]
+          #(
+            state,
+            [MoveReply(reply_to, Moved(from:, result: Error(error)))],
+            logs,
+          )
+        }
       }
     Down(Some(pid)) -> {
       let players = dict.filter(state.players, fn(_, p) { p != pid })
-      #(State(..state, players:), [])
+      let logs = [
+        log.Line(woof.Debug, "player process down", [log.player_pid(pid)]),
+      ]
+      #(State(..state, players:), [], logs)
     }
-    Down(None) -> #(state, [])
+    Down(None) -> #(state, [], [])
   }
 }
 
@@ -121,7 +175,10 @@ pub fn handle_message(
   state: State,
   message: Message,
 ) -> actor.Next(State, Message) {
-  let #(state, actions) = decide(state, message)
+  let logger =
+    log.world_logger(dict.size(state.rooms), dict.size(state.players))
+  let #(state, actions, logs) = decide(state, message)
+  list.each(logs, log.emit(logger, _))
   list.each(actions, run)
   actor.continue(state)
 }

@@ -3,8 +3,10 @@ import gleam/erlang/process
 import gleam/list
 import gleam/option.{None, Some}
 import mud/direction.{type Direction}
+import mud/log
 import mud/room
 import mud/world
+import woof
 
 fn room_with(
   id: room.Id,
@@ -46,7 +48,7 @@ pub fn join_replies_with_the_room_test() {
   let state = state_with([entrance])
   let reply_to = process.new_subject()
 
-  let #(new_state, actions) =
+  let #(new_state, actions, _logs) =
     world.decide(
       state,
       world.Join(name: "Alice", pid: process.self(), at: r1, reply_to: reply_to),
@@ -69,7 +71,7 @@ pub fn join_unknown_room_test() {
   let state = state_with([entrance])
   let reply_to = process.new_subject()
 
-  let #(new_state, actions) =
+  let #(new_state, actions, _logs) =
     world.decide(
       state,
       world.Join(name: "Alice", pid: process.self(), at: r2, reply_to: reply_to),
@@ -78,6 +80,29 @@ pub fn join_unknown_room_test() {
   assert actions
     == [world.JoinReply(reply_to, world.Joined(Error(world.NoSuchRoom)))]
   assert new_state == state
+}
+
+pub fn join_unknown_room_is_logged_as_an_error_test() {
+  let r1 = room.new_id("r1")
+  let r2 = room.new_id("r2")
+  let entrance = room_with(r1, "entrance", dict.new())
+  let state = state_with([entrance])
+  let reply_to = process.new_subject()
+
+  let #(_new_state, _actions, logs) =
+    world.decide(
+      state,
+      world.Join(name: "Alice", pid: process.self(), at: r2, reply_to: reply_to),
+    )
+
+  let assert [log.Line(level: woof.Warning, message:, fields:)] = logs
+  assert message == "player could not join: no such room"
+  assert fields
+    == [
+      log.player_name("alice"),
+      log.player_pid(process.self()),
+      log.room("r2"),
+    ]
 }
 
 pub fn join_while_already_logged_in_test() {
@@ -92,7 +117,7 @@ pub fn join_while_already_logged_in_test() {
   let reply_to = process.new_subject()
 
   // Different capitalisation, same player.
-  let #(new_state, actions) =
+  let #(new_state, actions, _logs) =
     world.decide(
       state,
       world.Join(name: "Alice", pid: process.self(), at: r1, reply_to: reply_to),
@@ -117,7 +142,7 @@ pub fn join_with_a_different_name_test() {
     )
   let reply_to = process.new_subject()
 
-  let #(new_state, _actions) =
+  let #(new_state, _actions, _logs) =
     world.decide(
       state,
       world.Join(name: "Bob", pid: process.self(), at: r1, reply_to: reply_to),
@@ -139,7 +164,8 @@ pub fn down_frees_the_name_test() {
       players: dict.from_list([#("alice", dead_pid)]),
     )
 
-  let #(new_state, actions) = world.decide(state, world.Down(Some(dead_pid)))
+  let #(new_state, actions, _logs) =
+    world.decide(state, world.Down(Some(dead_pid)))
 
   assert actions == []
   assert new_state.players == dict.new()
@@ -154,7 +180,7 @@ pub fn down_of_an_unknown_process_is_ignored_test() {
       players: dict.from_list([#("alice", process.self())]),
     )
 
-  let #(new_state, _actions) =
+  let #(new_state, _actions, _logs) =
     world.decide(state, world.Down(Some(process.spawn(fn() { Nil }))))
 
   assert new_state == state
@@ -169,7 +195,7 @@ pub fn down_of_none_is_ignored_test() {
       players: dict.from_list([#("alice", process.self())]),
     )
 
-  let #(new_state, _actions) = world.decide(state, world.Down(None))
+  let #(new_state, _actions, _logs) = world.decide(state, world.Down(None))
 
   assert new_state == state
 }
@@ -181,7 +207,7 @@ pub fn move_replies_with_the_destination_room_test() {
   let state = state_with([entrance, corridor])
   let reply_to = process.new_subject()
 
-  let #(new_state, actions) =
+  let #(new_state, actions, _logs) =
     world.decide(
       state,
       world.Move(from: entrance.id, dir: direction.North, reply_to: reply_to),
@@ -197,7 +223,7 @@ pub fn move_without_an_exit_test() {
   let state = state_with([entrance, corridor])
   let reply_to = process.new_subject()
 
-  let #(new_state, actions) =
+  let #(new_state, actions, _logs) =
     world.decide(
       state,
       world.Move(from: entrance.id, dir: direction.West, reply_to: reply_to),
@@ -219,7 +245,7 @@ pub fn move_into_a_missing_room_test() {
   let state = state_with([entrance])
   let reply_to = process.new_subject()
 
-  let #(new_state, actions) =
+  let #(new_state, actions, _logs) =
     world.decide(
       state,
       world.Move(from: entrance.id, dir: direction.North, reply_to: reply_to),
@@ -240,7 +266,7 @@ pub fn move_from_an_unknown_room_test() {
   let state = state_with([corridor])
   let reply_to = process.new_subject()
 
-  let #(new_state, actions) =
+  let #(new_state, actions, _logs) =
     world.decide(
       state,
       world.Move(

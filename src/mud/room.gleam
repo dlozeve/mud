@@ -5,6 +5,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import mud/direction.{type Direction}
 import mud/event
+import mud/log
+import woof
 
 // ----- Identity and handles ---------------------------------------------
 
@@ -14,6 +16,11 @@ pub opaque type Id {
 
 pub fn new_id(name: String) -> Id {
   Id(name)
+}
+
+pub fn id_to_string(id: Id) -> String {
+  let Id(s) = id
+  s
 }
 
 // A room's view of one player: the name for display, the pid that identifies
@@ -72,11 +79,22 @@ pub type Action {
 
 // ----- Logic ------------------------------------------------------------
 
-pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
+pub fn decide(
+  state: State,
+  message: Message,
+) -> #(State, List(Action), List(log.Line)) {
   case message {
     Enter(occupant) -> {
       case dict.get(state.occupants, occupant.pid) {
-        Ok(_) -> #(state, [])
+        Ok(_) -> {
+          let logs = [
+            log.Line(woof.Warning, "player already in room", [
+              log.player_name(occupant.name),
+              log.player_pid(occupant.pid),
+            ]),
+          ]
+          #(state, [], logs)
+        }
         Error(_) -> {
           let occupants = dict.insert(state.occupants, occupant.pid, occupant)
           let actions = [
@@ -88,7 +106,13 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
               event.PlayerArrived(occupant.name),
             )
           ]
-          #(State(..state, occupants:), actions)
+          let logs = [
+            log.Line(woof.Debug, "player entered room", [
+              log.player_name(occupant.name),
+              log.player_pid(occupant.pid),
+            ]),
+          ]
+          #(State(..state, occupants:), actions, logs)
         }
       }
     }
@@ -97,29 +121,75 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
         Ok(occupant) -> {
           let occupants = dict.delete(state.occupants, pid)
           let tells = broadcast(occupants, event.PlayerLeft(occupant.name))
-          #(State(..state, occupants:), tells)
+          let logs = [
+            log.Line(woof.Debug, "player left room", [
+              log.player_name(occupant.name),
+              log.player_pid(occupant.pid),
+            ]),
+          ]
+          #(State(..state, occupants:), tells, logs)
         }
-        Error(_) -> #(state, [])
+        Error(_) -> {
+          // Not a warning: it's expected when a connection is terminated,
+          // as both a Leave event is triggered and the monitor is down
+          let logs = [
+            log.Line(woof.Debug, "player not present in room on leave", [
+              log.player_pid(pid),
+            ]),
+          ]
+          #(state, [], logs)
+        }
       }
     }
     Look(pid) ->
       case dict.get(state.occupants, pid) {
-        Ok(_) -> #(state, [Tell(pid, you_are_in(state))])
-        Error(_) -> #(state, [])
+        Ok(occupant) -> {
+          let logs = [
+            log.Line(woof.Debug, "player looked", [
+              log.player_name(occupant.name),
+              log.player_pid(occupant.pid),
+            ]),
+          ]
+          #(state, [Tell(pid, you_are_in(state))], logs)
+        }
+        Error(_) -> {
+          let logs = [
+            log.Line(woof.Debug, "player not present in room on look", [
+              log.player_pid(pid),
+            ]),
+          ]
+          #(state, [], logs)
+        }
       }
     WhoIsHere(pid) ->
       case dict.get(state.occupants, pid) {
-        Ok(_) -> #(state, [
-          Tell(
-            pid,
-            event.OccupantList(
-              dict.delete(state.occupants, pid)
-              |> dict.map_values(fn(_, occupant) { occupant.name })
-              |> dict.values,
+        Ok(occupant) -> {
+          let actions = [
+            Tell(
+              pid,
+              event.OccupantList(
+                dict.delete(state.occupants, pid)
+                |> dict.map_values(fn(_, occupant) { occupant.name })
+                |> dict.values,
+              ),
             ),
-          ),
-        ])
-        Error(_) -> #(state, [])
+          ]
+          let logs = [
+            log.Line(woof.Debug, "player asked who is here", [
+              log.player_name(occupant.name),
+              log.player_pid(occupant.pid),
+            ]),
+          ]
+          #(state, actions, logs)
+        }
+        Error(_) -> {
+          let logs = [
+            log.Line(woof.Debug, "player not present in room on who is here", [
+              log.player_pid(pid),
+            ]),
+          ]
+          #(state, [], logs)
+        }
       }
     Say(speaker, text) -> {
       case dict.get(state.occupants, speaker) {
@@ -132,13 +202,32 @@ pub fn decide(state: State, message: Message) -> #(State, List(Action)) {
               event.PlayerSaid(player_name: occupant.name, text:),
             )
           ]
-          #(state, tells)
+          let logs = [
+            log.Line(woof.Debug, "player spoke", [
+              log.player_name(occupant.name),
+              log.player_pid(occupant.pid),
+              woof.str("text", text),
+            ]),
+          ]
+          #(state, tells, logs)
         }
-        Error(_) -> #(state, [])
+        Error(_) -> {
+          let logs = [
+            log.Line(woof.Debug, "player not present in room on say", [
+              log.player_pid(speaker),
+            ]),
+          ]
+          #(state, [], logs)
+        }
       }
     }
-    Down(Some(pid)) -> decide(state, Leave(pid))
-    Down(None) -> #(state, [])
+    Down(Some(pid)) -> {
+      let #(state, actions, logs) = decide(state, Leave(pid))
+      let down =
+        log.Line(woof.Debug, "player process down", [log.player_pid(pid)])
+      #(state, actions, [down, ..logs])
+    }
+    Down(None) -> #(state, [], [])
   }
 }
 
@@ -193,7 +282,10 @@ pub fn handle_message(
   state: State,
   message: Message,
 ) -> actor.Next(State, Message) {
-  let #(state, actions) = decide(state, message)
+  let logger =
+    log.room_logger(id_to_string(state.def.id), dict.size(state.occupants))
+  let #(state, actions, logs) = decide(state, message)
+  list.each(logs, log.emit(logger, _))
   list.each(actions, run(_, state))
   actor.continue(state)
 }
