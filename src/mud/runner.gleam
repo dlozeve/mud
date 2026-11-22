@@ -219,11 +219,11 @@ pub fn player_logger(state: session.State) -> woof.Logger {
   case state.status {
     session.AwaitingName -> log.player_logger("AwaitingName", [])
     session.Joining(name:) ->
-      log.player_logger("Joining", [log.player_name(name)])
+      log.player_logger("Joining", [log.occupant_name(name)])
     session.InGame(player:) ->
       log.player_logger("InGame", [
         log.pid(player.pid),
-        log.player_name(player.name),
+        log.occupant_name(player.name),
         log.room(room.id_to_string(player.room.id)),
       ])
   }

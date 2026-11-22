@@ -5,6 +5,7 @@ import gleam/option.{None, Some}
 import gleam/otp/actor
 import gleam/otp/static_supervisor
 import gleam/otp/supervision
+import mud/npc
 import mud/room
 import mud/world
 
@@ -36,6 +37,58 @@ pub fn room_child(
     |> actor.named(def.process_name)
     |> actor.start
   })
+}
+
+pub fn npc_child(
+  id: String,
+  name: String,
+  room: room.Def,
+) -> supervision.ChildSpecification(Subject(npc.Message)) {
+  supervision.worker(fn() {
+    let result =
+      actor.new_with_initialiser(1000, fn(subject) {
+        // The NPC monitors its room, so it also selects for DOWN messages.
+        let selector =
+          process.new_selector()
+          |> process.select(subject)
+          |> process.select_monitors(fn(down) {
+            case down {
+              process.ProcessDown(_, pid, _) -> npc.RoomDown(Some(pid))
+              // unreachable
+              process.PortDown(..) -> npc.RoomDown(None)
+            }
+          })
+        let state =
+          npc.State(
+            name:,
+            pid: process.self(),
+            subject:,
+            room:,
+            status: npc.Alive(5),
+            tick_ms: 1000,
+          )
+        actor.initialised(state)
+        |> actor.selecting(selector)
+        |> actor.returning(subject)
+        |> Ok
+      })
+      |> actor.on_message(npc.handle_message)
+      |> actor.named(process.new_name(id))
+      |> actor.start
+
+    case result {
+      Ok(actor.Started(pid:, data: subject)) -> {
+        // Send the join and the first tick once the actor is running, so the
+        // initialiser only has to build the state.
+        actor.send(subject, npc.Enter)
+        actor.send(subject, npc.Tick)
+        Ok(actor.Started(pid:, data: subject))
+      }
+      Error(error) -> Error(error)
+    }
+  })
+  // A dead NPC stops normally, and only an abnormal exit is a crash to restart.
+  |> supervision.restart(supervision.Transient)
 }
 
 pub fn world_child(

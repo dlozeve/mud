@@ -22,10 +22,11 @@ pub fn main() -> Nil {
   let world_name = process.new_name("world")
 
   let #(server_child, listener) =
-    server.server_child_with_listener(world_name, entrance, 3000)
+    server.server_child_with_listener(world_name, entrance.id, 3000)
   let supervisor =
     tree.rooms_supervisor(rooms)
     |> static_supervisor.add(tree.world_child(world_name, rooms))
+    |> static_supervisor.add(tree.npc_child("goblin", "a goblin", entrance))
     |> static_supervisor.add(server_child)
     |> static_supervisor.start
 

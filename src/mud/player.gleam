@@ -58,11 +58,19 @@ pub fn render(room_event: event.RoomEvent) -> String {
       <> room_description
       <> "\n"
       <> describe_exits(exits)
-    event.PlayerArrived(player_name) -> player_name <> " arrives."
-    event.PlayerLeft(player_name) -> player_name <> " leaves."
+    event.OccupantArrived(name, event.Player) -> name <> " arrives."
+    event.OccupantArrived(name, event.Npc) ->
+      string.capitalise(name) <> " has entered the room."
+    event.OccupantLeft(name, event.Player) -> name <> " leaves."
+    event.OccupantLeft(name, event.Npc) ->
+      string.capitalise(name) <> " has left the room."
     event.YouSaid(text) -> "You say: " <> text
-    event.PlayerSaid(player_name, text) -> player_name <> " says: " <> text
-    event.OccupantList(names) -> describe_occupants(names)
+    event.OccupantSaid(player_name, text, event.Player) ->
+      player_name <> " says: " <> text
+    event.OccupantSaid(name, text, event.Npc) ->
+      string.capitalise(name) <> " says: " <> text
+    event.OccupantList(player_names:, npc_names:) ->
+      describe_occupants(player_names, npc_names)
   }
 }
 
@@ -85,15 +93,37 @@ fn describe_exits(exits: List(Direction)) -> String {
   }
 }
 
-fn describe_occupants(names: List(String)) -> String {
-  case names {
-    [] -> "You are alone here."
-    [a] -> a <> " is here."
+fn describe_occupants(
+  player_names: List(String),
+  npc_names: List(String),
+) -> String {
+  let player_line = case player_names {
+    [] -> ""
+    [name] -> name <> " is here."
     names -> {
       let n = list.length(names)
       let #(front, tail) = list.split(names, n - 1)
       string.join(front, ", ") <> " and " <> string.concat(tail) <> " are here."
     }
+  }
+  let npc_line = case npc_names {
+    [] -> ""
+    [name] -> "There is " <> name <> " in the room."
+    names -> {
+      let n = list.length(names)
+      let #(front, tail) = list.split(names, n - 1)
+      "There are "
+      <> string.join(front, ", ")
+      <> " and "
+      <> string.concat(tail)
+      <> " in the room."
+    }
+  }
+  case player_line, npc_line {
+    "", "" -> "You are alone here."
+    _, "" -> player_line
+    "", _ -> npc_line
+    _, _ -> player_line <> "\n" <> npc_line
   }
 }
 

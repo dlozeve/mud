@@ -30,11 +30,23 @@ pub fn render_arrive_to_self_no_exit_test() {
 }
 
 pub fn render_arrive_to_other_test() {
-  assert player.render(event.PlayerArrived("Alice")) == "Alice arrives."
+  assert player.render(event.OccupantArrived("Alice", event.Player))
+    == "Alice arrives."
+}
+
+pub fn render_npc_arrive_to_other_test() {
+  assert player.render(event.OccupantArrived("a goblin", event.Npc))
+    == "A goblin has entered the room."
 }
 
 pub fn render_leave_to_other_test() {
-  assert player.render(event.PlayerLeft("Alice")) == "Alice leaves."
+  assert player.render(event.OccupantLeft("Alice", event.Player))
+    == "Alice leaves."
+}
+
+pub fn render_npc_leave_to_other_test() {
+  assert player.render(event.OccupantLeft("a goblin", event.Npc))
+    == "A goblin has left the room."
 }
 
 pub fn render_say_to_self_test() {
@@ -42,20 +54,46 @@ pub fn render_say_to_self_test() {
 }
 
 pub fn render_say_to_other_test() {
-  assert player.render(event.PlayerSaid("Alice", "hi")) == "Alice says: hi"
+  assert player.render(event.OccupantSaid("Alice", "hi", event.Player))
+    == "Alice says: hi"
 }
 
 pub fn render_occupant_list_test() {
-  assert player.render(event.OccupantList(["Alice", "Bob"]))
+  assert player.render(event.OccupantList(["Alice", "Bob"], []))
     == "Alice and Bob are here."
 }
 
 pub fn render_occupant_list_single_test() {
-  assert player.render(event.OccupantList(["Alice"])) == "Alice is here."
+  assert player.render(event.OccupantList(["Alice"], [])) == "Alice is here."
 }
 
 pub fn render_occupant_list_alone_test() {
-  assert player.render(event.OccupantList([])) == "You are alone here."
+  assert player.render(event.OccupantList([], [])) == "You are alone here."
+}
+
+pub fn render_npc_say_to_other_test() {
+  assert player.render(event.OccupantSaid("a goblin", "grrr", event.Npc))
+    == "A goblin says: grrr"
+}
+
+pub fn render_occupant_list_npc_only_test() {
+  assert player.render(event.OccupantList([], ["a goblin"]))
+    == "There is a goblin in the room."
+}
+
+pub fn render_occupant_list_npc_plural_test() {
+  assert player.render(event.OccupantList([], ["a goblin", "a bat"]))
+    == "There are a goblin and a bat in the room."
+}
+
+pub fn render_occupant_list_players_and_npcs_test() {
+  assert player.render(event.OccupantList(["Alice"], ["a goblin"]))
+    == "Alice is here.\nThere is a goblin in the room."
+}
+
+pub fn render_occupant_list_players_plural_and_npcs_test() {
+  assert player.render(event.OccupantList(["Alice", "Bob"], ["a goblin"]))
+    == "Alice and Bob are here.\nThere is a goblin in the room."
 }
 
 fn room() -> room.Def {
@@ -74,7 +112,7 @@ fn state() -> player.State {
 
 pub fn decide_event_renders_to_output_test() {
   let s = state()
-  assert player.decide(s, event.PlayerSaid("Bob", "hi"))
+  assert player.decide(s, event.OccupantSaid("Bob", "hi", event.Player))
     == #(s, [player.Output("Bob says: hi")])
 }
 

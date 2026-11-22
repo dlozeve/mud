@@ -9,7 +9,7 @@ import mud/room
 import tom
 
 pub type Map {
-  Map(rooms: List(room.Def), entrance: room.Id)
+  Map(rooms: List(room.Def), entrance: room.Def)
 }
 
 pub type ParseError {
@@ -40,7 +40,7 @@ pub fn parse_rooms(input: String) -> Result(Map, ParseError) {
       }
     })
   case rooms, dict.get(rooms_dict, room.new_id(map_src.entrance)) {
-    Ok(rooms), Ok(entrance) -> Ok(Map(rooms:, entrance: entrance.id))
+    Ok(rooms), Ok(entrance) -> Ok(Map(rooms:, entrance:))
     Error(e), _ -> Error(e)
     _, Error(_) -> Error(InvalidEntrance(map_src.entrance))
   }

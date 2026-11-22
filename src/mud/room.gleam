@@ -23,11 +23,16 @@ pub fn id_to_string(id: Id) -> String {
   s
 }
 
-// A room's view of one player: the name for display, the pid that identifies
+// A room's view of one player or NPC: the name for display, the pid that identifies
 // the connection (it keys the occupant map and is monitored for eviction), and
 // the listener that delivers room events to them.
 pub type Occupant {
-  Occupant(name: String, pid: process.Pid, listener: Listener)
+  Occupant(
+    name: String,
+    pid: process.Pid,
+    kind: event.OccupantKind,
+    listener: Listener,
+  )
 }
 
 pub type Listener {
@@ -37,9 +42,10 @@ pub type Listener {
 pub fn occupant(
   name: String,
   pid: process.Pid,
+  kind: event.OccupantKind,
   tell: fn(Id, event.RoomEvent) -> Nil,
 ) -> Occupant {
-  Occupant(name: name, pid: pid, listener: Listener(tell))
+  Occupant(name: name, pid: pid, listener: Listener(tell), kind:)
 }
 
 // ----- State ------------------------------------------------------------
@@ -88,28 +94,30 @@ pub fn decide(
       case dict.get(state.occupants, occupant.pid) {
         Ok(_) -> {
           let logs = [
-            log.Line(woof.Warning, "player already in room", [
-              log.player_name(occupant.name),
-              log.player_pid(occupant.pid),
+            log.Line(woof.Warning, "occupant already in room", [
+              log.occupant_name(occupant.name),
+              log.occupant_pid(occupant.pid),
+              log.occupant_kind(occupant.kind),
             ]),
           ]
           #(state, [], logs)
         }
         Error(_) -> {
           let occupants = dict.insert(state.occupants, occupant.pid, occupant)
-          let actions = [
-            Monitor(occupant.pid),
-            Tell(occupant.pid, you_are_in(state)),
-            ..tell_others(
-              occupants,
-              occupant.pid,
-              event.PlayerArrived(occupant.name),
+          let actions =
+            list.append(
+              [Monitor(occupant.pid), ..you_are_in_actions(state, occupant)],
+              tell_others(
+                occupants,
+                occupant.pid,
+                event.OccupantArrived(occupant.name, occupant.kind),
+              ),
             )
-          ]
           let logs = [
-            log.Line(woof.Debug, "player entered room", [
-              log.player_name(occupant.name),
-              log.player_pid(occupant.pid),
+            log.Line(woof.Debug, "occupant entered room", [
+              log.occupant_name(occupant.name),
+              log.occupant_pid(occupant.pid),
+              log.occupant_kind(occupant.kind),
             ]),
           ]
           #(State(..state, occupants:), actions, logs)
@@ -120,11 +128,16 @@ pub fn decide(
       case dict.get(state.occupants, pid) {
         Ok(occupant) -> {
           let occupants = dict.delete(state.occupants, pid)
-          let tells = broadcast(occupants, event.PlayerLeft(occupant.name))
+          let tells =
+            broadcast(
+              occupants,
+              event.OccupantLeft(occupant.name, occupant.kind),
+            )
           let logs = [
-            log.Line(woof.Debug, "player left room", [
-              log.player_name(occupant.name),
-              log.player_pid(occupant.pid),
+            log.Line(woof.Debug, "occupant left room", [
+              log.occupant_name(occupant.name),
+              log.occupant_pid(occupant.pid),
+              log.occupant_kind(occupant.kind),
             ]),
           ]
           #(State(..state, occupants:), tells, logs)
@@ -133,8 +146,8 @@ pub fn decide(
           // Not a warning: it's expected when a connection is terminated,
           // as both a Leave event is triggered and the monitor is down
           let logs = [
-            log.Line(woof.Debug, "player not present in room on leave", [
-              log.player_pid(pid),
+            log.Line(woof.Debug, "occupant not present in room on leave", [
+              log.occupant_pid(pid),
             ]),
           ]
           #(state, [], logs)
@@ -146,8 +159,8 @@ pub fn decide(
         Ok(occupant) -> {
           let logs = [
             log.Line(woof.Debug, "player looked", [
-              log.player_name(occupant.name),
-              log.player_pid(occupant.pid),
+              log.occupant_name(occupant.name),
+              log.occupant_pid(occupant.pid),
             ]),
           ]
           #(state, [Tell(pid, you_are_in(state))], logs)
@@ -155,7 +168,7 @@ pub fn decide(
         Error(_) -> {
           let logs = [
             log.Line(woof.Debug, "player not present in room on look", [
-              log.player_pid(pid),
+              log.occupant_pid(pid),
             ]),
           ]
           #(state, [], logs)
@@ -168,16 +181,31 @@ pub fn decide(
             Tell(
               pid,
               event.OccupantList(
-                dict.delete(state.occupants, pid)
-                |> dict.map_values(fn(_, occupant) { occupant.name })
-                |> dict.values,
+                player_names: dict.delete(state.occupants, pid)
+                  |> dict.filter(fn(_, occupant) {
+                    case occupant.kind {
+                      event.Player -> True
+                      event.Npc -> False
+                    }
+                  })
+                  |> dict.map_values(fn(_, occupant) { occupant.name })
+                  |> dict.values,
+                npc_names: dict.delete(state.occupants, pid)
+                  |> dict.filter(fn(_, occupant) {
+                    case occupant.kind {
+                      event.Npc -> True
+                      event.Player -> False
+                    }
+                  })
+                  |> dict.map_values(fn(_, occupant) { occupant.name })
+                  |> dict.values,
               ),
             ),
           ]
           let logs = [
             log.Line(woof.Debug, "player asked who is here", [
-              log.player_name(occupant.name),
-              log.player_pid(occupant.pid),
+              log.occupant_name(occupant.name),
+              log.occupant_pid(occupant.pid),
             ]),
           ]
           #(state, actions, logs)
@@ -185,7 +213,7 @@ pub fn decide(
         Error(_) -> {
           let logs = [
             log.Line(woof.Debug, "player not present in room on who is here", [
-              log.player_pid(pid),
+              log.occupant_pid(pid),
             ]),
           ]
           #(state, [], logs)
@@ -194,18 +222,24 @@ pub fn decide(
     Say(speaker, text) -> {
       case dict.get(state.occupants, speaker) {
         Ok(occupant) -> {
-          let tells = [
-            Tell(speaker, event.YouSaid(text:)),
-            ..tell_others(
-              state.occupants,
-              speaker,
-              event.PlayerSaid(player_name: occupant.name, text:),
+          let tells =
+            list.append(
+              you_said_actions(occupant, text),
+              tell_others(
+                state.occupants,
+                speaker,
+                event.OccupantSaid(
+                  name: occupant.name,
+                  text:,
+                  kind: occupant.kind,
+                ),
+              ),
             )
-          ]
           let logs = [
-            log.Line(woof.Debug, "player spoke", [
-              log.player_name(occupant.name),
-              log.player_pid(occupant.pid),
+            log.Line(woof.Debug, "occupant spoke", [
+              log.occupant_name(occupant.name),
+              log.occupant_pid(occupant.pid),
+              log.occupant_kind(occupant.kind),
               woof.str("text", text),
             ]),
           ]
@@ -213,8 +247,8 @@ pub fn decide(
         }
         Error(_) -> {
           let logs = [
-            log.Line(woof.Debug, "player not present in room on say", [
-              log.player_pid(speaker),
+            log.Line(woof.Debug, "occupant not present in room on say", [
+              log.occupant_pid(speaker),
             ]),
           ]
           #(state, [], logs)
@@ -224,7 +258,7 @@ pub fn decide(
     Down(Some(pid)) -> {
       let #(state, actions, logs) = decide(state, Leave(pid))
       let down =
-        log.Line(woof.Debug, "player process down", [log.player_pid(pid)])
+        log.Line(woof.Debug, "occupant process down", [log.occupant_pid(pid)])
       #(state, actions, [down, ..logs])
     }
     Down(None) -> #(state, [], [])
@@ -239,6 +273,22 @@ fn you_are_in(state: State) -> event.RoomEvent {
       dict.has_key(state.def.exits, d)
     }),
   )
+}
+
+// Second-person events are addressed to a player: an NPC has no "you" to
+// address, and ignores them, so they are not sent to one.
+fn you_are_in_actions(state: State, occupant: Occupant) -> List(Action) {
+  case occupant.kind {
+    event.Player -> [Tell(occupant.pid, you_are_in(state))]
+    event.Npc -> []
+  }
+}
+
+fn you_said_actions(occupant: Occupant, text: String) -> List(Action) {
+  case occupant.kind {
+    event.Player -> [Tell(occupant.pid, event.YouSaid(text:))]
+    event.Npc -> []
+  }
 }
 
 fn broadcast(

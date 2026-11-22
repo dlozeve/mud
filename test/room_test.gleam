@@ -11,7 +11,13 @@ import woof
 
 // Occupants are keyed by pid, so every test occupant needs its own.
 fn occupant_with(name: String) -> room.Occupant {
-  room.occupant(name, process.spawn(fn() { Nil }), fn(_, _) { Nil })
+  room.occupant(name, process.spawn(fn() { Nil }), event.Player, fn(_, _) {
+    Nil
+  })
+}
+
+fn npc_with(name: String) -> room.Occupant {
+  room.occupant(name, process.spawn(fn() { Nil }), event.Npc, fn(_, _) { Nil })
 }
 
 fn state_with(occupants: List(room.Occupant)) -> room.State {
@@ -37,8 +43,21 @@ pub fn say_broadcast_test() {
   assert set.from_list(actions)
     == set.from_list([
       room.Tell(alice.pid, event.YouSaid("hi")),
-      room.Tell(bob.pid, event.PlayerSaid(alice.name, "hi")),
+      room.Tell(bob.pid, event.OccupantSaid(alice.name, "hi", alice.kind)),
     ])
+}
+
+pub fn npc_say_broadcast_test() {
+  let alice = occupant_with("Alice")
+  let goblin = npc_with("a goblin")
+  let state = state_with([alice, goblin])
+  let #(_state, actions, _logs) =
+    room.decide(state, room.Say(goblin.pid, "grrr"))
+  // The NPC is not told about its own speech: there is no "you" to echo to.
+  assert actions
+    == [
+      room.Tell(alice.pid, event.OccupantSaid("a goblin", "grrr", event.Npc)),
+    ]
 }
 
 pub fn enter_broadcast_test() {
@@ -58,13 +77,28 @@ pub fn enter_broadcast_test() {
           exits: dict.keys(state.def.exits),
         ),
       ),
-      room.Tell(alice.pid, event.PlayerArrived(carol.name)),
-      room.Tell(bob.pid, event.PlayerArrived(carol.name)),
+      room.Tell(alice.pid, event.OccupantArrived(carol.name, carol.kind)),
+      room.Tell(bob.pid, event.OccupantArrived(carol.name, carol.kind)),
     ])
   assert dict.size(new_state.occupants) == 3
   assert dict.get(new_state.occupants, alice.pid) == Ok(alice)
   assert dict.get(new_state.occupants, bob.pid) == Ok(bob)
   assert dict.get(new_state.occupants, carol.pid) == Ok(carol)
+}
+
+pub fn npc_enter_is_monitored_and_announced_test() {
+  let alice = occupant_with("Alice")
+  let goblin = npc_with("a goblin")
+  let state = state_with([alice])
+  let #(new_state, actions, _logs) = room.decide(state, room.Enter(goblin))
+  // The NPC is monitored for eviction but, having no "you", is not sent the
+  // second-person description of the room.
+  assert set.from_list(actions)
+    == set.from_list([
+      room.Monitor(goblin.pid),
+      room.Tell(alice.pid, event.OccupantArrived(goblin.name, event.Npc)),
+    ])
+  assert dict.get(new_state.occupants, goblin.pid) == Ok(goblin)
 }
 
 pub fn leave_broadcast_test() {
@@ -75,8 +109,8 @@ pub fn leave_broadcast_test() {
   let #(_state, actions, _logs) = room.decide(state, room.Leave(alice.pid))
   assert set.from_list(actions)
     == set.from_list([
-      room.Tell(bob.pid, event.PlayerLeft(alice.name)),
-      room.Tell(carol.pid, event.PlayerLeft(alice.name)),
+      room.Tell(bob.pid, event.OccupantLeft(alice.name, alice.kind)),
+      room.Tell(carol.pid, event.OccupantLeft(alice.name, alice.kind)),
     ])
 }
 
@@ -110,7 +144,30 @@ pub fn enter_twice_test() {
 // ----- Eviction ---------------------------------------------------------
 
 fn occupant_with_pid(name: String, pid: process.Pid) -> room.Occupant {
-  room.occupant(name, pid, fn(_, _) { Nil })
+  room.occupant(name, pid, event.Player, fn(_, _) { Nil })
+}
+
+pub fn npc_leave_broadcast_test() {
+  let alice = occupant_with("Alice")
+  let goblin = npc_with("a goblin")
+  let state = state_with([alice, goblin])
+  let #(new_state, actions, _logs) = room.decide(state, room.Leave(goblin.pid))
+  assert actions
+    == [room.Tell(alice.pid, event.OccupantLeft("a goblin", event.Npc))]
+  assert !dict.has_key(new_state.occupants, goblin.pid)
+}
+
+pub fn down_evicts_a_dead_npc_test() {
+  let goblin_pid = process.spawn(fn() { Nil })
+  let goblin =
+    room.occupant("a goblin", goblin_pid, event.Npc, fn(_, _) { Nil })
+  let alice = occupant_with("Alice")
+  let state = state_with([alice, goblin])
+  let #(new_state, actions, _logs) =
+    room.decide(state, room.Down(Some(goblin_pid)))
+  assert actions
+    == [room.Tell(alice.pid, event.OccupantLeft("a goblin", event.Npc))]
+  assert !dict.has_key(new_state.occupants, goblin_pid)
 }
 
 pub fn down_evicts_the_occupant_test() {
@@ -123,7 +180,8 @@ pub fn down_evicts_the_occupant_test() {
   let #(new_state, actions, _logs) =
     room.decide(state, room.Down(Some(alice_pid)))
 
-  assert actions == [room.Tell(bob.pid, event.PlayerLeft(alice.name))]
+  assert actions
+    == [room.Tell(bob.pid, event.OccupantLeft(alice.name, alice.kind))]
   assert dict.has_key(new_state.occupants, bob.pid)
   assert !dict.has_key(new_state.occupants, alice.pid)
 }
@@ -199,11 +257,14 @@ pub fn who_is_here_test() {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
-  let state = state_with([alice, bob, carol])
+  let goblin = npc_with("a goblin")
+  let state = state_with([alice, bob, carol, goblin])
   let #(_, actions, _logs) = room.decide(state, room.WhoIsHere(carol.pid))
-  let assert [room.Tell(pid, event.OccupantList(names:))] = actions
+  let assert [room.Tell(pid, event.OccupantList(player_names:, npc_names:))] =
+    actions
   assert pid == carol.pid
-  assert set.from_list(names) == set.from_list([alice.name, bob.name])
+  assert set.from_list(player_names) == set.from_list([alice.name, bob.name])
+  assert npc_names == [goblin.name]
 }
 
 // ----- Logging -----------------------------------------------------------
@@ -217,8 +278,13 @@ pub fn entering_twice_is_logged_as_a_warning_test() {
 
   assert actions == []
   let assert [log.Line(level: woof.Warning, message:, fields:)] = logs
-  assert message == "player already in room"
-  assert fields == [log.player_name("Bob"), log.player_pid(bob.pid)]
+  assert message == "occupant already in room"
+  assert fields
+    == [
+      log.occupant_name("Bob"),
+      log.occupant_pid(bob.pid),
+      log.occupant_kind(bob.kind),
+    ]
 }
 
 pub fn a_down_is_logged_before_the_leave_it_causes_test() {
@@ -229,7 +295,7 @@ pub fn a_down_is_logged_before_the_leave_it_causes_test() {
   let #(_state, _actions, logs) = room.decide(state, room.Down(Some(alice_pid)))
 
   let assert [
-    log.Line(message: "player process down", ..),
-    log.Line(message: "player left room", ..),
+    log.Line(message: "occupant process down", ..),
+    log.Line(message: "occupant left room", ..),
   ] = logs
 }

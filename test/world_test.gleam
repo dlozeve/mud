@@ -99,8 +99,8 @@ pub fn join_unknown_room_is_logged_as_an_error_test() {
   assert message == "player could not join: no such room"
   assert fields
     == [
-      log.player_name("alice"),
-      log.player_pid(process.self()),
+      log.occupant_name("alice"),
+      log.occupant_pid(process.self()),
       log.room("r2"),
     ]
 }

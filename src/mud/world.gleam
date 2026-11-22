@@ -64,8 +64,8 @@ pub fn decide(
         Error(_), _ -> {
           let logs = [
             log.Line(woof.Warning, "player could not join: no such room", [
-              log.player_name(name),
-              log.player_pid(pid),
+              log.occupant_name(name),
+              log.occupant_pid(pid),
               log.room(room.id_to_string(at)),
             ]),
           ]
@@ -74,8 +74,8 @@ pub fn decide(
         Ok(_), Ok(_) -> {
           let logs = [
             log.Line(woof.Warning, "player could not join: already logged in", [
-              log.player_name(name),
-              log.player_pid(pid),
+              log.occupant_name(name),
+              log.occupant_pid(pid),
               log.room(room.id_to_string(at)),
             ]),
           ]
@@ -84,8 +84,8 @@ pub fn decide(
         Ok(room), Error(_) -> {
           let logs = [
             log.Line(woof.Debug, "player joining", [
-              log.player_name(name),
-              log.player_pid(pid),
+              log.occupant_name(name),
+              log.occupant_pid(pid),
               log.room(room.id_to_string(room.id)),
             ]),
           ]
@@ -131,7 +131,7 @@ pub fn decide(
     Down(Some(pid)) -> {
       let players = dict.filter(state.players, fn(_, p) { p != pid })
       let logs = [
-        log.Line(woof.Debug, "player process down", [log.player_pid(pid)]),
+        log.Line(woof.Debug, "player process down", [log.occupant_pid(pid)]),
       ]
       #(State(..state, players:), [], logs)
     }

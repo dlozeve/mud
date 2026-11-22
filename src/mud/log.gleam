@@ -17,6 +17,8 @@
 ////   `player could not join: no such room`.
 
 import gleam/erlang/process
+import gleam/string
+import mud/event
 import woof
 
 /// One field of a log line: a stable key and a typed value.
@@ -45,15 +47,21 @@ pub fn pid(pid: process.Pid) -> Field {
   woof.str("pid", pid_to_string(pid))
 }
 
-/// The `player_pid` field. Use it when a pid identifies a *player* from
-/// another process' point of view (room, world, server).
-pub fn player_pid(pid: process.Pid) -> Field {
-  woof.str("player_pid", pid_to_string(pid))
+/// The `occupant_pid` field. Use it when a pid identifies an *occupant* (a
+/// player or an NPC) from another process' point of view (room, world, server).
+pub fn occupant_pid(pid: process.Pid) -> Field {
+  woof.str("occupant_pid", pid_to_string(pid))
 }
 
-/// The `player_name` field, as the player typed it or as normalised (world).
-pub fn player_name(name: String) -> Field {
-  woof.str("player_name", name)
+/// The `occupant_name` field: the name as the player typed it, or as
+/// normalised (world), or as the NPC was defined.
+pub fn occupant_name(name: String) -> Field {
+  woof.str("occupant_name", name)
+}
+
+/// The `occupant_kind` field: whether the occupant is a player or an NPC.
+pub fn occupant_kind(kind: event.OccupantKind) -> Field {
+  woof.str("occupant_kind", string.inspect(kind))
 }
 
 /// The `room` field: a room id, never a display name.
@@ -84,6 +92,14 @@ pub fn world_logger(rooms: Int, players: Int) -> woof.Logger {
     count("rooms_count", rooms),
     count("players_count", players),
   ])
+}
+
+/// Logger for an NPC actor, carrying its name and pid.
+///
+/// The `npc` namespace means the message does not repeat the subject: it logs
+/// `died`, not `npc died`.
+pub fn npc_logger(name: String, npc_pid: process.Pid) -> woof.Logger {
+  woof.new("npc") |> woof.set_context([occupant_name(name), pid(npc_pid)])
 }
 
 /// Logger for one connection, carrying its session status and any further

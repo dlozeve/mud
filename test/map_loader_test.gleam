@@ -24,12 +24,12 @@ description = \"Long and narrow, with a few torches on the walls. Damp.\"
 south = \"entrance\"
 "
 
-  let assert Ok(map_loader.Map(rooms:, entrance: entrance_id)) =
+  let assert Ok(map_loader.Map(rooms:, entrance:)) =
     map_loader.parse_rooms(input)
   assert list.length(rooms) == 2
 
-  let assert Ok(entrance) =
-    list.find(rooms, fn(r) { r.id == room.new_id("entrance") })
+  assert Ok(entrance)
+    == list.find(rooms, fn(r) { r.id == room.new_id("entrance") })
   let assert Ok(corridor) =
     list.find(rooms, fn(r) { r.id == room.new_id("corridor") })
 
@@ -42,8 +42,6 @@ south = \"entrance\"
   assert corridor.description
     == "Long and narrow, with a few torches on the walls. Damp."
   assert corridor.exits == dict.from_list([#(direction.South, entrance.id)])
-
-  assert entrance_id == entrance.id
 }
 
 pub fn parse_rooms_no_entrance_test() {

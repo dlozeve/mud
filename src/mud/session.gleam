@@ -347,7 +347,12 @@ fn clean_line(line: String) -> Result(String, Nil) {
 // The room's handle on this player: it tells the player about room events by
 // posting them into the connection's own inbox.
 pub fn to_occupant(state: State, player_state: player.State) -> room.Occupant {
-  room.occupant(player_state.name, player_state.pid, fn(room_id, room_event) {
-    process.send(state.subject, RoomMessage(room_id, room_event))
-  })
+  room.occupant(
+    player_state.name,
+    player_state.pid,
+    event.Player,
+    fn(room_id, room_event) {
+      process.send(state.subject, RoomMessage(room_id, room_event))
+    },
+  )
 }
