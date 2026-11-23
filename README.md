@@ -12,12 +12,30 @@ libraries for interop with OTP, along with
 
 ## Actors
 
-- **world actor:** holding the room graph and the player directory
-- one **room actor** per room: holding that room's occupants
-- one **NPC** actor per NPC
-- a **glisten** listener that accepts TCP connections
+An actor is simply an Erlang OTP process, i.e. a "green thread". There
+is no shared memory, each actor/process has its own state and can only
+communicate with other processes through message-passing.
 
-All under a single static supervisor.
+Each actor has:
+- a **state**, in the form of a `State` data structure,
+- a set of **messages** it can receive (an enum `Message`),
+- a set of **actions** it can take (an enum `Action`),
+- a pure `decide` function, which transform an existing state and a
+  message into an updated state and a list of actions to perform,
+- a `run` function, which takes a state and a list of actions and
+  execute them (generally by sending messages to other actors).
+
+All of this is threaded into a `handle_message` function, which reacts
+to each message by calling `decide` and `run`, and updates the
+state. This is the function that is passed to `actor.new()`.
+
+This project has the following actors:
+- **world actor:** holding the room graph and the player directory,
+- one **room actor** per room: holding that room's occupants,
+- one **NPC** actor per NPC,
+- a [glisten](https://glisten.hexdocs.pm/) listener that accepts TCP connections.
+
+All under a single [static supervisor](https://gleam-otp.hexdocs.pm/gleam/otp/static_supervisor.html).
 
 A connection is handled by its own process, which owns the `session`
 state machine and runs the effects defined in `session`.
