@@ -29,6 +29,33 @@ pub fn render_arrive_to_self_no_exit_test() {
     == "You are in the dungeon.\nIt is dark.\nThere is no exit."
 }
 
+pub fn render_arrive_to_self_staircase_up_test() {
+  assert player.render(
+      event.YouAreIn("the dungeon", "It is dark.", [direction.Up]),
+    )
+    == "You are in the dungeon.\nIt is dark.\nThere is a staircase leading up."
+}
+
+pub fn render_arrive_to_self_staircases_up_and_down_test() {
+  assert player.render(
+      event.YouAreIn("the dungeon", "It is dark.", [
+        direction.Up,
+        direction.Down,
+      ]),
+    )
+    == "You are in the dungeon.\nIt is dark.\nThere are staircases leading up and down."
+}
+
+pub fn render_arrive_to_self_door_and_staircase_test() {
+  assert player.render(
+      event.YouAreIn("the dungeon", "It is dark.", [
+        direction.North,
+        direction.Down,
+      ]),
+    )
+    == "You are in the dungeon.\nIt is dark.\nThere is a single door, North.\nThere is a staircase leading down."
+}
+
 pub fn render_arrive_to_other_test() {
   assert player.render(event.OccupantArrived("Alice", event.Player))
     == "Alice arrives."

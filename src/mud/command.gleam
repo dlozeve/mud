@@ -47,6 +47,8 @@ fn parse_direction(s: String) -> Result(Direction, String) {
     "e" | "east" -> Ok(direction.East)
     "s" | "south" -> Ok(direction.South)
     "w" | "west" -> Ok(direction.West)
+    "u" | "up" -> Ok(direction.Up)
+    "d" | "down" -> Ok(direction.Down)
     _ -> Error(s)
   }
 }

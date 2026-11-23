@@ -66,6 +66,8 @@ fn direction_decoder() -> decode.Decoder(Direction) {
     "east" -> decode.success(direction.East)
     "south" -> decode.success(direction.South)
     "west" -> decode.success(direction.West)
+    "up" -> decode.success(direction.Up)
+    "down" -> decode.success(direction.Down)
     _ -> decode.failure(direction.North, "Direction")
   }
 }
@@ -103,6 +105,8 @@ fn reverse_direction(dir: Direction) -> Direction {
     direction.East -> direction.West
     direction.South -> direction.North
     direction.West -> direction.East
+    direction.Up -> direction.Down
+    direction.Down -> direction.Up
   }
 }
 

@@ -126,8 +126,25 @@ pub fn render(room_event: event.RoomEvent) -> String {
 }
 
 fn describe_exits(exits: List(Direction)) -> String {
+  // Up and Down are not doorways, they are staircases.
+  let #(staircases, doorways) =
+    list.partition(exits, fn(dir) {
+      case dir {
+        direction.Up | direction.Down -> True
+        _ -> False
+      }
+    })
+  case describe_doorways(doorways), describe_staircases(staircases) {
+    "", "" -> "There is no exit."
+    doorways, "" -> doorways
+    "", staircases -> staircases
+    doorways, staircases -> doorways <> "\n" <> staircases
+  }
+}
+
+fn describe_doorways(exits: List(Direction)) -> String {
   case list.map(exits, direction.render) {
-    [] -> "There is no exit."
+    [] -> ""
     [a] -> "There is a single door, " <> a <> "."
     [a, b] -> "There are two doors: " <> a <> " and " <> b <> "."
     words -> {
@@ -136,6 +153,25 @@ fn describe_exits(exits: List(Direction)) -> String {
       "There are "
       <> int.to_string(n)
       <> " doors: "
+      <> string.join(front, ", ")
+      <> " and "
+      <> string.concat(tail)
+      <> "."
+    }
+  }
+}
+
+fn describe_staircases(exits: List(Direction)) -> String {
+  case list.map(exits, direction.render) {
+    [] -> ""
+    [a] -> "There is a staircase leading " <> a <> "."
+    [a, b] -> "There are staircases leading " <> a <> " and " <> b <> "."
+    words -> {
+      let n = list.length(words)
+      let #(front, tail) = list.split(words, n - 1)
+      "There are "
+      <> int.to_string(n)
+      <> " staircases leading "
       <> string.join(front, ", ")
       <> " and "
       <> string.concat(tail)
@@ -183,7 +219,10 @@ fn help() -> String {
     dict.from_list([
       #("help", "Display this help"),
       #("say <message>", "Talk to other players in the room"),
-      #("go north/south/east/west (or n/s/e/w)", "Go through a door"),
+      #(
+        "go north/south/east/west/up/down (or n/s/e/w/u/d)",
+        "Go through a door",
+      ),
       #("look", "Look around you"),
       #("who", "Who is here?"),
       #("attack <npc>", "Attack an NPC in the room"),

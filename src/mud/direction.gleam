@@ -3,6 +3,8 @@ pub type Direction {
   East
   South
   West
+  Up
+  Down
 }
 
 pub fn render(dir: Direction) -> String {
@@ -11,9 +13,11 @@ pub fn render(dir: Direction) -> String {
     East -> "East"
     South -> "South"
     West -> "West"
+    Up -> "up"
+    Down -> "down"
   }
 }
 
 pub fn all() -> List(Direction) {
-  [North, East, South, West]
+  [North, East, South, West, Up, Down]
 }
