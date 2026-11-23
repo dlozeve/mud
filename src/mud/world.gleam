@@ -191,14 +191,15 @@ pub fn join(
   pid: process.Pid,
   at: room.Id,
   reply_to: Subject(Reply),
-) -> Nil {
+) -> Result(Nil, Nil) {
   case process.named(world) {
     Ok(_pid) ->
       actor.send(
         process.named_subject(world),
         Join(name:, pid:, at:, reply_to:),
       )
-    Error(_) -> Nil
+      |> Ok
+    Error(_) -> Error(Nil)
   }
 }
 

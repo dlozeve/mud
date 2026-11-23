@@ -1,5 +1,5 @@
 import gleam/erlang/process
-import gleam/option.{type Option, None, Some}
+import gleam/option.{None, Some}
 import gleam/string
 import mud/combat
 import mud/direction
@@ -62,13 +62,14 @@ pub fn run_effects_with(
     [session.Join(to_room_id), ..rest] ->
       case state.status {
         session.Joining(player_name) -> {
-          world.join(
-            state.world,
-            player_name,
-            process.self(),
-            to_room_id,
-            state.replies,
-          )
+          let _ =
+            world.join(
+              state.world,
+              player_name,
+              process.self(),
+              to_room_id,
+              state.replies,
+            )
           logger |> woof.log(woof.Info, "joining", [])
           schedule(state.subject, 5000, session.JoinTimeout)
           run_effects_with(state, send, schedule, rest)
@@ -92,7 +93,8 @@ pub fn run_effects_with(
               process.demonitor_process(monitor)
             None -> Nil
           }
-          room.enter(to_room.process_name, session.to_occupant(state, player))
+          let _ =
+            room.enter(to_room.process_name, session.to_occupant(state, player))
           let room_watch =
             Some(session.RoomWatch(pid: pid, monitor: process.monitor(pid)))
           run_effects_with(
@@ -118,7 +120,7 @@ pub fn run_effects_with(
       case state.status {
         session.InGame(player_state) -> {
           logger |> woof.log(woof.Info, "leaving room", [])
-          room.leave(room_name, player_state.pid)
+          let _ = room.leave(room_name, player_state.pid)
           run_effects_with(state, send, schedule, rest)
         }
         session.AwaitingName | session.Joining(_) ->
@@ -126,7 +128,7 @@ pub fn run_effects_with(
       }
     [session.AnnounceDeath(room_name, pid), ..rest] -> {
       logger |> woof.log(woof.Info, "died", [])
-      room.died(room_name, pid)
+      let _ = room.died(room_name, pid)
       run_effects_with(state, send, schedule, rest)
     }
     [session.Do(action), ..rest] ->
@@ -148,7 +150,7 @@ fn run_effect(
     player.Say(line) ->
       with_player(state, action, fn(player) {
         logger |> woof.log(woof.Debug, "said", [woof.str("line", line)])
-        room.say(player.room.process_name, player.pid, line)
+        let _ = room.say(player.room.process_name, player.pid, line)
         Ok(state)
       })
     player.Move(direction) ->
@@ -165,13 +167,13 @@ fn run_effect(
     player.Look ->
       with_player(state, action, fn(player) {
         logger |> woof.log(woof.Info, "looked", [])
-        room.look(player.room.process_name, player.pid)
+        let _ = room.look(player.room.process_name, player.pid)
         Ok(state)
       })
     player.WhoIsHere ->
       with_player(state, action, fn(player) {
         logger |> woof.log(woof.Info, "asked who is here", [])
-        room.who_is_here(player.room.process_name, player.pid)
+        let _ = room.who_is_here(player.room.process_name, player.pid)
         Ok(state)
       })
     player.Attack(name) ->
@@ -182,7 +184,7 @@ fn run_effect(
           woof.str("target", name),
           woof.bool("hit", hit),
         ])
-        room.attack(player.room.process_name, player.pid, name, hit)
+        let _ = room.attack(player.room.process_name, player.pid, name, hit)
         Ok(state)
       })
     // The session turns this into `AnnounceDeath` and `Stop` effects.
@@ -196,8 +198,8 @@ fn with_player(
   perform: fn(player.State) -> Result(session.State, StopReason(reason)),
 ) -> Result(session.State, StopReason(reason)) {
   case current_player(state) {
-    Some(player) -> perform(player)
-    None -> skip_playerless_effect(state, action)
+    Ok(player) -> perform(player)
+    Error(_) -> skip_playerless_effect(state, action)
   }
 }
 
@@ -225,11 +227,11 @@ fn write(
   }
 }
 
-fn current_player(state: session.State) -> Option(player.State) {
+fn current_player(state: session.State) -> Result(player.State, Nil) {
   case state.status {
-    session.AwaitingName -> None
-    session.Joining(_) -> None
-    session.InGame(player) -> Some(player)
+    session.AwaitingName -> Error(Nil)
+    session.Joining(_) -> Error(Nil)
+    session.InGame(player) -> Ok(player)
   }
 }
 

@@ -199,15 +199,21 @@ fn run(action: Action, state: State) -> Nil {
   case action {
     ScheduleTick(tick_ms:) -> schedule_tick(state.subject, tick_ms)
     JoinRoom(attempt:) -> join(state, attempt)
-    AttackPlayer(target, damage) ->
-      room.npc_attack(
-        state.room.process_name,
-        state.pid,
-        target.pid,
-        state.name,
-        damage,
-      )
-    Die -> room.died(state.room.process_name, state.pid)
+    AttackPlayer(target, damage) -> {
+      let _ =
+        room.npc_attack(
+          state.room.process_name,
+          state.pid,
+          target.pid,
+          state.name,
+          damage,
+        )
+      Nil
+    }
+    Die -> {
+      let _ = room.died(state.room.process_name, state.pid)
+      Nil
+    }
   }
 }
 
@@ -217,7 +223,8 @@ fn join(state: State, attempt: Int) -> Nil {
   case process.named(state.room.process_name) {
     Ok(room_pid) -> {
       let _ = process.monitor(room_pid)
-      room.enter(state.room.process_name, to_occupant(state, state.pid))
+      let _ = room.enter(state.room.process_name, to_occupant(state, state.pid))
+      Nil
     }
     Error(_) -> {
       // The room is not up yet: retry shortly, which also logs the attempt.

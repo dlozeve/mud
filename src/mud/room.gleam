@@ -3,6 +3,7 @@ import gleam/erlang/process
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import gleam/result
 import gleam/string
 import mud/combat
 import mud/direction.{type Direction}
@@ -498,43 +499,45 @@ fn checked_named_subject(
   }
 }
 
-pub fn enter(room_name: process.Name(Message), occupant: Occupant) -> Nil {
-  case checked_named_subject(room_name) {
-    Ok(subject) -> actor.send(subject, Enter(occupant))
-    Error(_) -> Nil
-  }
+pub fn enter(
+  room_name: process.Name(Message),
+  occupant: Occupant,
+) -> Result(Nil, Nil) {
+  checked_named_subject(room_name)
+  |> result.map(fn(subject) { actor.send(subject, Enter(occupant)) })
 }
 
-pub fn leave(room_name: process.Name(Message), pid: process.Pid) -> Nil {
-  case checked_named_subject(room_name) {
-    Ok(subject) -> actor.send(subject, Leave(pid:))
-    Error(_) -> Nil
-  }
+pub fn leave(
+  room_name: process.Name(Message),
+  pid: process.Pid,
+) -> Result(Nil, Nil) {
+  checked_named_subject(room_name)
+  |> result.map(fn(subject) { actor.send(subject, Leave(pid:)) })
 }
 
-pub fn look(room_name: process.Name(Message), pid: process.Pid) -> Nil {
-  case checked_named_subject(room_name) {
-    Ok(subject) -> actor.send(subject, Look(pid:))
-    Error(_) -> Nil
-  }
+pub fn look(
+  room_name: process.Name(Message),
+  pid: process.Pid,
+) -> Result(Nil, Nil) {
+  checked_named_subject(room_name)
+  |> result.map(fn(subject) { actor.send(subject, Look(pid:)) })
 }
 
-pub fn who_is_here(room_name: process.Name(Message), pid: process.Pid) -> Nil {
-  case checked_named_subject(room_name) {
-    Ok(subject) -> actor.send(subject, WhoIsHere(pid:))
-    Error(_) -> Nil
-  }
+pub fn who_is_here(
+  room_name: process.Name(Message),
+  pid: process.Pid,
+) -> Result(Nil, Nil) {
+  checked_named_subject(room_name)
+  |> result.map(fn(subject) { actor.send(subject, WhoIsHere(pid:)) })
 }
 
 pub fn say(
   room_name: process.Name(Message),
   speaker: process.Pid,
   text: String,
-) -> Nil {
-  case checked_named_subject(room_name) {
-    Ok(subject) -> actor.send(subject, Say(speaker:, text:))
-    Error(_) -> Nil
-  }
+) -> Result(Nil, Nil) {
+  checked_named_subject(room_name)
+  |> result.map(fn(subject) { actor.send(subject, Say(speaker:, text:)) })
 }
 
 pub fn attack(
@@ -542,11 +545,11 @@ pub fn attack(
   attacker: process.Pid,
   target_name: String,
   hit: Bool,
-) -> Nil {
-  case checked_named_subject(room_name) {
-    Ok(subject) -> actor.send(subject, Attack(attacker:, target_name:, hit:))
-    Error(_) -> Nil
-  }
+) -> Result(Nil, Nil) {
+  checked_named_subject(room_name)
+  |> result.map(fn(subject) {
+    actor.send(subject, Attack(attacker:, target_name:, hit:))
+  })
 }
 
 pub fn npc_attack(
@@ -555,17 +558,17 @@ pub fn npc_attack(
   target_pid: process.Pid,
   npc_name: String,
   damage: Int,
-) -> Nil {
-  case checked_named_subject(room_name) {
-    Ok(subject) ->
-      actor.send(subject, NpcAttack(npc_pid:, target_pid:, npc_name:, damage:))
-    Error(_) -> Nil
-  }
+) -> Result(Nil, Nil) {
+  checked_named_subject(room_name)
+  |> result.map(fn(subject) {
+    actor.send(subject, NpcAttack(npc_pid:, target_pid:, npc_name:, damage:))
+  })
 }
 
-pub fn died(room_name: process.Name(Message), pid: process.Pid) -> Nil {
-  case checked_named_subject(room_name) {
-    Ok(subject) -> actor.send(subject, Died(pid:))
-    Error(_) -> Nil
-  }
+pub fn died(
+  room_name: process.Name(Message),
+  pid: process.Pid,
+) -> Result(Nil, Nil) {
+  checked_named_subject(room_name)
+  |> result.map(fn(subject) { actor.send(subject, Died(pid:)) })
 }

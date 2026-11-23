@@ -306,7 +306,8 @@ pub fn sending_to_an_unregistered_world_is_dropped_test() -> Nil {
   let world_name = process.new_name("no such world")
   let replies = process.new_subject()
 
-  world.join(world_name, "Alice", process.self(), room.new_id("r1"), replies)
+  let _ =
+    world.join(world_name, "Alice", process.self(), room.new_id("r1"), replies)
   let _ = world.move(world_name, room.new_id("r1"), direction.North, replies)
   Nil
 }

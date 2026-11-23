@@ -345,13 +345,14 @@ pub fn lethal_npc_attack_kills_the_player_and_tells_the_room_test() -> Nil {
 
   // Drive the room directly: the attack is deterministic, unlike a real NPC's
   // hit roll. A damage value at least as large as the player's hp is lethal.
-  room.npc_attack(
-    world.entrance.process_name,
-    process.self(),
-    alice.pid,
-    "a goblin",
-    100,
-  )
+  let _ =
+    room.npc_attack(
+      world.entrance.process_name,
+      process.self(),
+      alice.pid,
+      "a goblin",
+      100,
+    )
 
   expect_output(alice, "You died")
   expect_stopped(alice)
