@@ -48,3 +48,15 @@ pub fn split_whitespace_test() {
 pub fn who_test() {
   assert command.parse("Who is here?") == command.WhoIsHere
 }
+
+pub fn attack_test() {
+  assert command.parse("attack a goblin") == command.Attack("a goblin")
+}
+
+pub fn attack_is_case_insensitive_test() {
+  assert command.parse("ATTACK Goblin") == command.Attack("Goblin")
+}
+
+pub fn attack_missing_target_test() {
+  assert command.parse("attack") == command.MissingTarget
+}

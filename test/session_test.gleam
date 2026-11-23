@@ -94,8 +94,7 @@ fn in_game_state() -> session.State {
 
 fn in_room_state(room: room.Def) -> session.State {
   let world_name = process.new_name("world")
-  let player_state =
-    player.State(pid: process.self(), name: "Alice", room: room)
+  let player_state = player.new(process.self(), "Alice", room)
   state_with_world(world_name, session.InGame(player_state))
 }
 
@@ -196,6 +195,12 @@ pub fn receive_bytes_in_game_test() {
   assert session.receive_bytes(state, <<"something\n">>)
     |> effects
     == [session.Do(player.Output("Unknown command: something"))]
+  assert session.receive_bytes(state, <<"attack a goblin\n">>)
+    |> effects
+    == [session.Do(player.Attack("a goblin"))]
+  assert session.receive_bytes(state, <<"attack\n">>)
+    |> effects
+    == [session.Do(player.Output("Attack what?"))]
 }
 
 pub fn receive_bytes_line_too_long_test() {
@@ -270,6 +275,71 @@ pub fn receive_message_in_joining_test() {
     == []
 }
 
+// ----- Combat -----------------------------------------------------------
+
+pub fn receive_message_damage_reduces_hp_test() {
+  let state = in_game_state()
+  let assert session.InGame(player_state) = state.status
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      session.RoomMessage(player_state.room.id, event.NpcHitYou("a goblin", 10)),
+    )
+
+  assert effects
+    == [
+      session.Do(player.Output("A goblin hits you for 10 damage.")),
+      session.Do(player.Output("You have 90/100 hp.")),
+    ]
+  let assert session.InGame(new_player_state) = new_state.status
+  assert new_player_state.hp == 90
+}
+
+pub fn receive_message_lethal_damage_dies_and_announces_test() {
+  let state = in_game_state()
+  let assert session.InGame(player_state) = state.status
+
+  let #(new_state, effects) =
+    session.receive_message(
+      state,
+      session.RoomMessage(
+        player_state.room.id,
+        event.NpcHitYou("a goblin", 100),
+      ),
+    )
+
+  assert effects
+    == [
+      session.Do(player.Output("You died")),
+      session.AnnounceDeath(player_state.room.process_name, player_state.pid),
+      session.Stop,
+    ]
+  let assert session.InGame(new_player_state) = new_state.status
+  assert new_player_state.hp == 0
+}
+
+pub fn receive_message_damage_from_a_stale_room_is_ignored_test() {
+  let state = in_game_state()
+  assert session.receive_message(
+      state,
+      session.RoomMessage(room.new_id("stale room"), event.NpcHitYou("x", 1)),
+    )
+    |> effects
+    == []
+}
+
+pub fn receive_message_npc_only_event_is_ignored_test() {
+  let state = in_game_state()
+  let assert session.InGame(player_state) = state.status
+  assert session.receive_message(
+      state,
+      session.RoomMessage(player_state.room.id, event.NpcTargetGone),
+    )
+    |> effects
+    == []
+}
+
 // ----- World replies ----------------------------------------------------
 
 pub fn join_reply_starts_the_game_test() {
@@ -283,7 +353,8 @@ pub fn join_reply_starts_the_game_test() {
     )
 
   assert effects == [session.EnterRoom(entrance, 0)]
-  let assert session.InGame(player.State(_pid, name, room)) = new_state.status
+  let assert session.InGame(player.State(_pid, name, room, _hp)) =
+    new_state.status
   assert name == "Alice"
   assert room == entrance
 }
@@ -366,7 +437,8 @@ pub fn move_reply_relocates_the_player_test() {
       session.LeaveRoom(entrance.process_name),
       session.EnterRoom(corridor, 0),
     ]
-  let assert session.InGame(player.State(_pid, name, room)) = new_state.status
+  let assert session.InGame(player.State(_pid, name, room, _hp)) =
+    new_state.status
   assert name == "Alice"
   assert room == corridor
 }

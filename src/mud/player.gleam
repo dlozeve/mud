@@ -3,6 +3,7 @@ import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/string
+import mud/combat
 import mud/command.{type Command}
 import mud/direction.{type Direction}
 import mud/event.{type RoomEvent}
@@ -11,7 +12,11 @@ import mud/room
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  State(pid: process.Pid, name: String, room: room.Def)
+  State(pid: process.Pid, name: String, room: room.Def, hp: Int)
+}
+
+pub fn new(pid: process.Pid, name: String, room: room.Def) -> State {
+  State(pid:, name:, room:, hp: combat.player_max_hp)
 }
 
 // ----- Action -----------------------------------------------------------
@@ -22,6 +27,8 @@ pub type Action {
   Move(Direction)
   Look
   WhoIsHere
+  Attack(String)
+  Die
 }
 
 // ----- Logic ------------------------------------------------------------
@@ -37,16 +44,47 @@ pub fn decide_command(
     command.Go(dir) -> #(state, [Move(dir)])
     command.Look -> #(state, [Look])
     command.WhoIsHere -> #(state, [WhoIsHere])
+    command.Attack(name) -> #(state, [Attack(name)])
     command.Quit -> #(state, [])
     command.BadDirection(dir) -> #(state, [Output("Unknown direction: " <> dir)])
     command.MissingDirection -> #(state, [Output("Go where?")])
+    command.MissingTarget -> #(state, [Output("Attack what?")])
     command.Unknown(line) -> #(state, [Output("Unknown command: " <> line)])
   }
 }
 
 // for messages from other processes
 pub fn decide(state: State, room_event: RoomEvent) -> #(State, List(Action)) {
-  #(state, [Output(render(room_event))])
+  case room_event {
+    // Damage is the one room event that changes player state.
+    event.NpcHitYou(name, damage) -> take_damage(state, name, damage)
+    // Combat events addressed to an NPC; a player never receives these.
+    event.NpcAttacked(..) | event.NpcTargetGone -> #(state, [])
+    _ -> #(state, [Output(render(room_event))])
+  }
+}
+
+fn take_damage(
+  state: State,
+  name: String,
+  damage: Int,
+) -> #(State, List(Action)) {
+  let hp = int.max(state.hp - damage, 0)
+  case hp {
+    0 -> #(State(..state, hp: 0), [Output("You died"), Die])
+    _ -> #(State(..state, hp:), [
+      Output(render(event.NpcHitYou(name, damage))),
+      Output(hp_line(hp)),
+    ])
+  }
+}
+
+pub fn hp_line(hp: Int) -> String {
+  "You have "
+  <> int.to_string(hp)
+  <> "/"
+  <> int.to_string(combat.player_max_hp)
+  <> " hp."
 }
 
 pub fn render(room_event: event.RoomEvent) -> String {
@@ -64,6 +102,9 @@ pub fn render(room_event: event.RoomEvent) -> String {
     event.OccupantLeft(name, event.Player) -> name <> " leaves."
     event.OccupantLeft(name, event.Npc) ->
       string.capitalise(name) <> " has left the room."
+    event.OccupantDied(name, event.Player) -> name <> " has died."
+    event.OccupantDied(name, event.Npc) ->
+      string.capitalise(name) <> " has died."
     event.YouSaid(text) -> "You say: " <> text
     event.OccupantSaid(player_name, text, event.Player) ->
       player_name <> " says: " <> text
@@ -71,6 +112,16 @@ pub fn render(room_event: event.RoomEvent) -> String {
       string.capitalise(name) <> " says: " <> text
     event.OccupantList(player_names:, npc_names:) ->
       describe_occupants(player_names, npc_names)
+    event.AttackFailed(target_name) -> "There is no " <> target_name <> " here."
+    event.YouHitNpc(name, damage) ->
+      "You hit " <> name <> " for " <> int.to_string(damage) <> " damage."
+    event.YouMissedNpc(name) -> "You miss " <> name <> "."
+    event.NpcAttacked(..) | event.NpcTargetGone -> ""
+    event.NpcHitYou(name, damage) ->
+      string.capitalise(name)
+      <> " hits you for "
+      <> int.to_string(damage)
+      <> " damage."
   }
 }
 
@@ -135,6 +186,7 @@ fn help() -> String {
       #("go north/south/east/west (or n/s/e/w)", "Go through a door"),
       #("look", "Look around you"),
       #("who", "Who is here?"),
+      #("attack <npc>", "Attack an NPC in the room"),
       #("quit", "Quit the dungeon"),
     ])
   let assert Ok(max_length) =

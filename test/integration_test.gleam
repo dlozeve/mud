@@ -308,6 +308,59 @@ pub fn two_clients_move_and_say_test() {
   stop_world(world)
 }
 
+// ----- T1b: combat -----------------------------------------------------
+
+pub fn attacking_a_missing_npc_reports_no_target_test() {
+  let world = start_world()
+  let alice = start_client(world, 1)
+
+  expect_output(alice, welcome)
+  send_line(alice, "Alice")
+  expect_output(alice, you_are_in(world.entrance))
+
+  send_line(alice, "attack goblin")
+  expect_output(alice, "There is no goblin here.")
+
+  send_line(alice, "quit")
+  expect_stopped(alice)
+  stop_world(world)
+}
+
+pub fn lethal_npc_attack_kills_the_player_and_tells_the_room_test() {
+  let world = start_world()
+  let alice = start_client(world, 1)
+  let bob = start_client(world, 2)
+
+  expect_output(alice, welcome)
+  expect_output(bob, welcome)
+
+  send_line(alice, "Alice")
+  expect_output(alice, you_are_in(world.entrance))
+
+  send_line(bob, "Bob")
+  expect_output(bob, you_are_in(world.entrance))
+  expect_output(alice, "Bob arrives.")
+
+  // Drive the room directly: the attack is deterministic, unlike a real NPC's
+  // hit roll. A damage value at least as large as the player's hp is lethal.
+  room.npc_attack(
+    world.entrance.process_name,
+    process.self(),
+    alice.pid,
+    "a goblin",
+    100,
+  )
+
+  expect_output(alice, "You died")
+  expect_stopped(alice)
+  expect_output(bob, "Alice has died.")
+  expect_no_output(bob)
+
+  send_line(bob, "quit")
+  expect_stopped(bob)
+  stop_world(world)
+}
+
 // ----- T2: restarts ----------------------------------------------------
 
 pub fn room_restart_reenters_test() {

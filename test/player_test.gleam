@@ -107,7 +107,7 @@ fn room() -> room.Def {
 }
 
 fn state() -> player.State {
-  player.State(pid: process.self(), name: "Alice", room: room())
+  player.new(process.self(), "Alice", room())
 }
 
 pub fn decide_event_renders_to_output_test() {
@@ -136,4 +136,78 @@ pub fn decide_command_unknown_test() {
   let s = state()
   assert player.decide_command(s, command.Unknown("sing"))
     == #(s, [player.Output("Unknown command: sing")])
+}
+
+// ----- Combat -----------------------------------------------------------
+
+pub fn render_occupant_died_test() {
+  assert player.render(event.OccupantDied("Alice", event.Player))
+    == "Alice has died."
+}
+
+pub fn render_npc_died_test() {
+  assert player.render(event.OccupantDied("a goblin", event.Npc))
+    == "A goblin has died."
+}
+
+pub fn render_attack_failed_test() {
+  assert player.render(event.AttackFailed("goblin"))
+    == "There is no goblin here."
+}
+
+pub fn render_hit_npc_test() {
+  assert player.render(event.YouHitNpc("a goblin", 2))
+    == "You hit a goblin for 2 damage."
+}
+
+pub fn render_miss_npc_test() {
+  assert player.render(event.YouMissedNpc("a goblin")) == "You miss a goblin."
+}
+
+pub fn render_npc_hit_you_test() {
+  assert player.render(event.NpcHitYou("a goblin", 1))
+    == "A goblin hits you for 1 damage."
+}
+
+pub fn decide_command_attack_test() {
+  let s = state()
+  assert player.decide_command(s, command.Attack("a goblin"))
+    == #(s, [player.Attack("a goblin")])
+}
+
+pub fn decide_command_missing_target_test() {
+  let s = state()
+  assert player.decide_command(s, command.MissingTarget)
+    == #(s, [player.Output("Attack what?")])
+}
+
+pub fn decide_damage_reduces_hp_test() {
+  let s = state()
+  let #(s, actions) = player.decide(s, event.NpcHitYou("a goblin", 10))
+  assert s.hp == 90
+  assert actions
+    == [
+      player.Output("A goblin hits you for 10 damage."),
+      player.Output("You have 90/100 hp."),
+    ]
+}
+
+pub fn decide_lethal_damage_dies_test() {
+  let s = state()
+  let #(s, actions) = player.decide(s, event.NpcHitYou("a goblin", 100))
+  assert s.hp == 0
+  assert actions == [player.Output("You died"), player.Die]
+}
+
+pub fn decide_damage_never_goes_negative_test() {
+  let s = state()
+  let #(s, _actions) = player.decide(s, event.NpcHitYou("a goblin", 500))
+  assert s.hp == 0
+}
+
+pub fn decide_npc_only_combat_events_are_ignored_test() {
+  let s = state()
+  assert player.decide(s, event.NpcTargetGone) == #(s, [])
+  assert player.decide(s, event.NpcAttacked("Alice", process.self(), 2))
+    == #(s, [])
 }

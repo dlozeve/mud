@@ -2,6 +2,7 @@ import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import mud/combat
 import mud/event
 import mud/log
 import mud/room
@@ -26,11 +27,17 @@ pub type State {
 
 pub type NpcStatus {
   Alive(hp: Int)
+  Attacking(hp: Int, target: Target)
   Dead
 }
 
+pub type Target {
+  Target(pid: process.Pid, name: String)
+}
+
 pub type Message {
-  Tick
+  // The roll is produced at the actor boundary so `decide` stays pure.
+  Tick(roll: Int)
   Enter
   Join(attempt: Int)
   RoomMessage(room: room.Id, event: event.RoomEvent)
@@ -38,10 +45,10 @@ pub type Message {
 }
 
 pub type Action {
-  Say(String)
   ScheduleTick(tick_ms: Int)
   JoinRoom(attempt: Int)
-  LeaveRoom
+  AttackPlayer(target: Target, damage: Int)
+  Die
 }
 
 pub fn decide(
@@ -49,49 +56,105 @@ pub fn decide(
   message: Message,
 ) -> #(State, List(Action), List(log.Line)) {
   case message {
-    Tick ->
+    Tick(roll) ->
       case state.status {
-        // hp counts down towards zero; the tick after it reaches zero is the
-        // death tick, so the NPC is not dead yet when hp hits 0.
-        Alive(0) -> #(
-          State(..state, status: Dead),
-          [Say("I am dead"), LeaveRoom],
-          [log.Line(woof.Info, "died", [])],
-        )
-        Alive(hp) -> #(
-          State(..state, status: Alive(hp - 1)),
-          [Say("I am alive!"), ScheduleTick(state.tick_ms)],
-          [log.Line(woof.Debug, "ticked", [woof.int("hp", hp - 1)])],
-        )
         Dead -> #(state, [], [])
+        Alive(hp) -> #(state, [ScheduleTick(state.tick_ms)], [
+          log.Line(woof.Debug, "ticked", [woof.int("hp", hp)]),
+        ])
+        Attacking(hp, target) -> {
+          let hit = combat.npc_hits(roll)
+          let attack = case hit {
+            True -> [AttackPlayer(target, combat.npc_damage)]
+            False -> []
+          }
+          #(state, list.append(attack, [ScheduleTick(state.tick_ms)]), [
+            log.Line(woof.Debug, "ticked", [
+              woof.int("hp", hp),
+              woof.bool("hit", hit),
+            ]),
+          ])
+        }
       }
     Enter ->
-      case state.status {
-        Alive(_) -> #(state, [JoinRoom(0)], [joining(state, 0)])
-        Dead -> #(state, [], [])
+      case is_alive(state.status) {
+        True -> #(state, [JoinRoom(0)], [joining(state, 0)])
+        False -> #(state, [], [])
       }
     Join(attempt) ->
-      case state.status {
-        Alive(_) if attempt > max_join_attempts -> #(state, [], [
+      case is_alive(state.status) {
+        True if attempt > max_join_attempts -> #(state, [], [
           log.Line(woof.Warning, "could not join room: gave up", [
             log.room(room.id_to_string(state.room.id)),
             woof.int("attempt", attempt),
           ]),
         ])
-        Alive(_) -> #(state, [JoinRoom(attempt)], [joining(state, attempt)])
-        Dead -> #(state, [], [])
+        True -> #(state, [JoinRoom(attempt)], [joining(state, attempt)])
+        False -> #(state, [], [])
       }
-    RoomMessage(_room, _event) -> #(state, [], [])
+    RoomMessage(_room, room_event) -> decide_room_event(state, room_event)
     RoomDown(Some(_pid)) ->
-      case state.status {
-        Alive(_) -> #(state, [JoinRoom(0)], [
+      case is_alive(state.status) {
+        True -> #(state, [JoinRoom(0)], [
           log.Line(woof.Warning, "room went down: rejoining", [
             log.room(room.id_to_string(state.room.id)),
           ]),
         ])
-        Dead -> #(state, [], [])
+        False -> #(state, [], [])
       }
     RoomDown(None) -> #(state, [], [])
+  }
+}
+
+fn decide_room_event(
+  state: State,
+  room_event: event.RoomEvent,
+) -> #(State, List(Action), List(log.Line)) {
+  case state.status, room_event {
+    // A dead NPC has nothing left to react to.
+    Dead, _ -> #(state, [], [])
+    _, event.NpcAttacked(attacker_name, attacker_pid, damage) -> {
+      let hp = case state.status {
+        Alive(hp) | Attacking(hp, _) -> hp
+        Dead -> 0
+      }
+      let hp = hp - damage
+      case hp <= 0 {
+        True -> #(State(..state, status: Dead), [Die], [
+          log.Line(woof.Info, "died", []),
+        ])
+        False -> #(
+          State(
+            ..state,
+            status: Attacking(
+              hp,
+              Target(pid: attacker_pid, name: attacker_name),
+            ),
+          ),
+          [],
+          [
+            log.Line(woof.Info, "attacked", [
+              woof.int("hp", hp),
+              log.occupant_name(attacker_name),
+            ]),
+          ],
+        )
+      }
+    }
+    // The target left the room or died: go back to idling.
+    Attacking(hp, _), event.NpcTargetGone -> #(
+      State(..state, status: Alive(hp)),
+      [],
+      [log.Line(woof.Debug, "attack target gone", [])],
+    )
+    _, _ -> #(state, [], [])
+  }
+}
+
+fn is_alive(status: NpcStatus) -> Bool {
+  case status {
+    Dead -> False
+    Alive(_) | Attacking(..) -> True
   }
 }
 
@@ -104,10 +167,17 @@ fn joining(state: State, attempt: Int) -> log.Line {
 
 fn run(action: Action, state: State) -> Nil {
   case action {
-    Say(text) -> room.say(state.room.process_name, state.pid, text)
     ScheduleTick(tick_ms:) -> schedule_tick(state.subject, tick_ms)
     JoinRoom(attempt:) -> join(state, attempt)
-    LeaveRoom -> room.leave(state.room.process_name, state.pid)
+    AttackPlayer(target, damage) ->
+      room.npc_attack(
+        state.room.process_name,
+        state.pid,
+        target.pid,
+        state.name,
+        damage,
+      )
+    Die -> room.died(state.room.process_name, state.pid)
   }
 }
 
@@ -129,7 +199,7 @@ fn join(state: State, attempt: Int) -> Nil {
 }
 
 fn schedule_tick(subject: Subject(Message), tick_ms: Int) -> Nil {
-  let _ = process.send_after(subject, tick_ms, Tick)
+  let _ = process.send_after(subject, tick_ms, Tick(combat.roll()))
   Nil
 }
 
@@ -139,8 +209,8 @@ fn schedule_tick(subject: Subject(Message), tick_ms: Int) -> Nil {
 /// is final until respawning is designed.
 pub fn is_finished(state: State) -> Bool {
   case state.status {
-    Alive(_) -> False
     Dead -> True
+    Alive(_) | Attacking(..) -> False
   }
 }
 

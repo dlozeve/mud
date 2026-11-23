@@ -52,6 +52,7 @@ pub type Effect {
   Join(room.Id)
   EnterRoom(room: room.Def, attempt: Int)
   LeaveRoom(process.Name(room.Message))
+  AnnounceDeath(process.Name(room.Message), process.Pid)
   Stop
 }
 
@@ -173,7 +174,10 @@ pub fn receive_message(
       case state.status {
         InGame(player_state) if player_state.room.id == room_id -> {
           let #(player_state, actions) = player.decide(player_state, room_event)
-          #(State(..state, status: InGame(player_state)), list.map(actions, Do))
+          #(
+            State(..state, status: InGame(player_state)),
+            player_effects(player_state, actions),
+          )
         }
         // Message from a stale room that has not updated its occupancy, ignored.
         InGame(_) -> #(state, [])
@@ -216,7 +220,7 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
     world.Joined(Ok(room)) ->
       case state.status {
         Joining(name:) -> {
-          let player_state = player.State(pid: process.self(), name:, room:)
+          let player_state = player.new(process.self(), name, room)
           #(State(..state, status: InGame(player_state)), [
             EnterRoom(room, attempt: 0),
           ])
@@ -250,6 +254,27 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
         ])
         _ -> #(state, [])
       }
+  }
+}
+
+// A `Die` action is a session-level event: the player is told, the room is
+// told to broadcast the death, and the connection stops.
+fn player_effects(
+  player_state: player.State,
+  actions: List(player.Action),
+) -> List(Effect) {
+  let died = list.any(actions, fn(action) { action == player.Die })
+  let effects =
+    actions
+    |> list.filter(fn(action) { action != player.Die })
+    |> list.map(Do)
+  case died {
+    True ->
+      list.append(effects, [
+        AnnounceDeath(player_state.room.process_name, player_state.pid),
+        Stop,
+      ])
+    False -> effects
   }
 }
 

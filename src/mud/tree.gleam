@@ -5,6 +5,7 @@ import gleam/option.{None, Some}
 import gleam/otp/actor
 import gleam/otp/static_supervisor
 import gleam/otp/supervision
+import mud/combat
 import mud/npc
 import mud/room
 import mud/world
@@ -64,7 +65,7 @@ pub fn npc_child(
             pid: process.self(),
             subject:,
             room:,
-            status: npc.Alive(5),
+            status: npc.Alive(combat.npc_max_hp),
             tick_ms: 1000,
           )
         actor.initialised(state)
@@ -81,7 +82,7 @@ pub fn npc_child(
         // Send the join and the first tick once the actor is running, so the
         // initialiser only has to build the state.
         actor.send(subject, npc.Enter)
-        actor.send(subject, npc.Tick)
+        actor.send(subject, npc.Tick(combat.roll()))
         Ok(actor.Started(pid:, data: subject))
       }
       Error(error) -> Error(error)

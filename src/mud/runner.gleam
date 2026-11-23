@@ -1,6 +1,7 @@
 import gleam/erlang/process
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import mud/combat
 import mud/direction
 import mud/log
 import mud/player
@@ -121,6 +122,11 @@ pub fn run_effects_with(
         }
         _ -> run_effects_with(state, send, schedule, rest)
       }
+    [session.AnnounceDeath(room_name, pid), ..rest] -> {
+      logger |> woof.log(woof.Info, "died", [])
+      room.died(room_name, pid)
+      run_effects_with(state, send, schedule, rest)
+    }
     [session.Do(action), ..rest] ->
       case run_effect(state, send, action) {
         Ok(new_state) -> run_effects_with(new_state, send, schedule, rest)
@@ -166,6 +172,19 @@ fn run_effect(
         room.who_is_here(player.room.process_name, player.pid)
         Ok(state)
       })
+    player.Attack(name) ->
+      with_player(state, action, fn(player) {
+        let hit = combat.player_hits(combat.roll())
+        logger
+        |> woof.log(woof.Info, "attacked", [
+          woof.str("target", name),
+          woof.bool("hit", hit),
+        ])
+        room.attack(player.room.process_name, player.pid, name, hit)
+        Ok(state)
+      })
+    // The session turns this into `AnnounceDeath` and `Stop` effects.
+    player.Die -> Ok(state)
   }
 }
 

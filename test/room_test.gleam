@@ -3,6 +3,7 @@ import gleam/erlang/process
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/set
+import mud/combat
 import mud/direction
 import mud/event
 import mud/log
@@ -251,6 +252,119 @@ pub fn you_are_in_lists_exits_in_a_fixed_order_test() {
         ),
       ),
     ]
+}
+
+// ----- Combat -----------------------------------------------------------
+
+pub fn attack_a_missing_npc_tells_the_attacker_test() {
+  let alice = occupant_with("Alice")
+  let state = state_with([alice])
+  let #(_state, actions, _logs) =
+    room.decide(state, room.Attack(alice.pid, "goblin", True))
+  assert actions == [room.Tell(alice.pid, event.AttackFailed("goblin"))]
+}
+
+pub fn attack_hits_the_npc_test() {
+  let alice = occupant_with("Alice")
+  let goblin = npc_with("a goblin")
+  let state = state_with([alice, goblin])
+  let #(_state, actions, _logs) =
+    room.decide(state, room.Attack(alice.pid, "a goblin", True))
+  assert set.from_list(actions)
+    == set.from_list([
+      room.Tell(alice.pid, event.YouHitNpc("a goblin", combat.player_damage)),
+      room.Tell(
+        goblin.pid,
+        event.NpcAttacked("Alice", alice.pid, combat.player_damage),
+      ),
+    ])
+}
+
+pub fn attack_misses_the_npc_test() {
+  let alice = occupant_with("Alice")
+  let goblin = npc_with("a goblin")
+  let state = state_with([alice, goblin])
+  let #(_state, actions, _logs) =
+    room.decide(state, room.Attack(alice.pid, "a goblin", False))
+  assert set.from_list(actions)
+    == set.from_list([
+      room.Tell(alice.pid, event.YouMissedNpc("a goblin")),
+      room.Tell(goblin.pid, event.NpcAttacked("Alice", alice.pid, 0)),
+    ])
+}
+
+pub fn attack_can_omit_the_article_test() {
+  let alice = occupant_with("Alice")
+  let goblin = npc_with("a goblin")
+  let state = state_with([alice, goblin])
+  let #(_state, actions, _logs) =
+    room.decide(state, room.Attack(alice.pid, "goblin", True))
+  assert set.from_list(actions)
+    == set.from_list([
+      room.Tell(alice.pid, event.YouHitNpc("a goblin", combat.player_damage)),
+      room.Tell(
+        goblin.pid,
+        event.NpcAttacked("Alice", alice.pid, combat.player_damage),
+      ),
+    ])
+}
+
+pub fn attack_does_not_target_players_test() {
+  let alice = occupant_with("Alice")
+  let bob = occupant_with("Bob")
+  let state = state_with([alice, bob])
+  let #(_state, actions, _logs) =
+    room.decide(state, room.Attack(alice.pid, "Bob", True))
+  assert actions == [room.Tell(alice.pid, event.AttackFailed("Bob"))]
+}
+
+pub fn attack_by_a_non_occupant_is_ignored_test() {
+  let alice = occupant_with("Alice")
+  let goblin = npc_with("a goblin")
+  let state = state_with([alice, goblin])
+  let #(_state, actions, _logs) =
+    room.decide(state, room.Attack(process.self(), "a goblin", True))
+  assert actions == []
+}
+
+pub fn npc_attack_tells_the_target_player_test() {
+  let alice = occupant_with("Alice")
+  let goblin = npc_with("a goblin")
+  let state = state_with([alice, goblin])
+  let #(_state, actions, _logs) =
+    room.decide(state, room.NpcAttack(goblin.pid, alice.pid, "a goblin", 1))
+  assert actions == [room.Tell(alice.pid, event.NpcHitYou("a goblin", 1))]
+}
+
+pub fn npc_attack_on_a_missing_target_tells_the_npc_test() {
+  let goblin = npc_with("a goblin")
+  let state = state_with([goblin])
+  let #(_state, actions, _logs) =
+    room.decide(
+      state,
+      room.NpcAttack(goblin.pid, process.self(), "a goblin", 1),
+    )
+  assert actions == [room.Tell(goblin.pid, event.NpcTargetGone)]
+}
+
+pub fn death_broadcasts_and_removes_the_occupant_test() {
+  let alice = occupant_with("Alice")
+  let bob = occupant_with("Bob")
+  let state = state_with([alice, bob])
+  let #(new_state, actions, _logs) = room.decide(state, room.Died(alice.pid))
+  assert actions
+    == [room.Tell(bob.pid, event.OccupantDied(alice.name, alice.kind))]
+  assert dict.has_key(new_state.occupants, bob.pid)
+  assert !dict.has_key(new_state.occupants, alice.pid)
+}
+
+pub fn death_of_a_non_occupant_is_ignored_test() {
+  let alice = occupant_with("Alice")
+  let state = state_with([alice])
+  let #(new_state, actions, _logs) =
+    room.decide(state, room.Died(process.self()))
+  assert actions == []
+  assert new_state == state
 }
 
 pub fn who_is_here_test() {

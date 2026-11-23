@@ -8,9 +8,11 @@ pub type Command {
   Go(Direction)
   Look
   WhoIsHere
+  Attack(String)
   Quit
   BadDirection(String)
   MissingDirection
+  MissingTarget
   Unknown(String)
 }
 
@@ -31,6 +33,8 @@ pub fn parse(line: String) -> Command {
           }
         "look", _ -> Look
         "who", _ -> WhoIsHere
+        "attack", [] -> MissingTarget
+        "attack", rest -> Attack(string.join(rest, " "))
         "q", _ | "quit", _ -> Quit
         _, _ -> Unknown(line)
       }

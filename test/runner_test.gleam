@@ -31,7 +31,7 @@ fn state_with(status: session.Status) -> session.State {
 }
 
 fn player_in(room: room.Def) -> player.State {
-  player.State(pid: process.self(), name: "Alice", room: room)
+  player.new(process.self(), "Alice", room)
 }
 
 fn recording_sender(subject: process.Subject(String)) -> runner.Sender(Nil) {
@@ -152,6 +152,50 @@ pub fn join_schedules_a_timeout_test() {
 
   assert is_ok(result)
   assert process.receive(scheduled, 100) == Ok(#(5000, session.JoinTimeout))
+  assert process.receive(sent, 100) == Ok("after\n")
+}
+
+// ----- Combat -----------------------------------------------------------
+
+pub fn announce_death_continues_to_later_effects_test() {
+  let target_room = room_def("room")
+  let state = state_with(session.InGame(player_in(target_room)))
+  let sent = process.new_subject()
+  let scheduled = process.new_subject()
+
+  let result =
+    runner.run_effects_with(
+      state,
+      recording_sender(sent),
+      recording_scheduler(scheduled),
+      [
+        session.AnnounceDeath(target_room.process_name, process.self()),
+        session.Do(player.Output("after")),
+      ],
+    )
+
+  assert is_ok(result)
+  assert process.receive(sent, 100) == Ok("after\n")
+}
+
+pub fn attack_continues_to_later_effects_test() {
+  let target_room = room_def("room")
+  let state = state_with(session.InGame(player_in(target_room)))
+  let sent = process.new_subject()
+  let scheduled = process.new_subject()
+
+  let result =
+    runner.run_effects_with(
+      state,
+      recording_sender(sent),
+      recording_scheduler(scheduled),
+      [
+        session.Do(player.Attack("a goblin")),
+        session.Do(player.Output("after")),
+      ],
+    )
+
+  assert is_ok(result)
   assert process.receive(sent, 100) == Ok("after\n")
 }
 

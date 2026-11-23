@@ -204,6 +204,73 @@ sequenceDiagram
   end
 ```
 
+### Combat
+
+Players start with 100 hp and NPCs with 5. `attack <npc>` sends the
+attack through the room, which finds the NPC by name (the leading
+article is optional: `attack goblin` finds `a goblin`). The player has
+a 85% chance of hitting the NPC. A hit deals 2 damage; a miss still
+provokes the NPC, which switches to `Attacking` and targets the
+attacker.
+
+While attacking, the NPC rolls its own, lower 30% hit chance on every
+tick and deals 1 damage. Damage is routed back through the room, which
+is the only process that knows where the target player is. If the
+target leaves the room or dies, the room tells the NPC and it returns
+to idling.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor C as Client
+  participant S as Session
+  participant Run as runner
+  participant R as Room
+  participant N as NPC (goblin)
+  participant V as Victim session
+
+  C->>S: "attack goblin" + newline
+  S->>S: command.parse -> Attack("goblin")
+  S->>Run: Do(player.Attack("goblin"))
+  Run->>Run: combat.player_hits(combat.roll()) -> True
+  Run->>R: room.attack(room, alice_pid, "goblin", hit: True)
+  R->>R: find NPC by name
+  R-->>S: YouHitNpc("a goblin", 2)
+  R-->>N: NpcAttacked("Alice", alice_pid, 2)
+  N->>N: status = Attacking(hp - 2, Alice)
+
+  Note over N: on the next tick
+  N->>N: combat.npc_hits(roll) -> True
+  N->>R: room.npc_attack(room, goblin_pid, alice_pid, "a goblin", 1)
+  R-->>S: NpcHitYou("a goblin", 1)
+  S->>S: hp = hp - 1, render damage and remaining hp
+```
+
+### Dying
+
+A player at 0 hp is told `You died`, the room broadcasts
+`OccupantDied` to the other occupants, and the session stops, which
+disconnects the client. The room removes the player when it receives
+the death message; the later leave and `DOWN` are harmless no-ops.
+NPCs die the same way: the room broadcasts `OccupantDied` and the NPC
+actor stops.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant N as NPC
+  participant R as Room
+  participant S as Alice's session
+  participant B as Bob's session
+
+  N->>R: room.npc_attack(..., alice_pid, damage)
+  R-->>S: NpcHitYou("a goblin", damage)
+  S->>S: hp reaches 0 -> Output("You died")
+  S->>R: room.died(room, alice_pid)
+  R-->>B: OccupantDied("Alice", Player)
+  S->>S: Stop -> connection closes
+```
+
 ### Quitting
 
 `quit` is the one command that produces a `Stop` effect. The session

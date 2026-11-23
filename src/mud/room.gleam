@@ -3,6 +3,8 @@ import gleam/erlang/process
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import gleam/string
+import mud/combat
 import mud/direction.{type Direction}
 import mud/event
 import mud/log
@@ -73,6 +75,14 @@ pub type Message {
   Look(pid: process.Pid)
   WhoIsHere(pid: process.Pid)
   Say(speaker: process.Pid, text: String)
+  Attack(attacker: process.Pid, target_name: String, hit: Bool)
+  NpcAttack(
+    npc_pid: process.Pid,
+    target_pid: process.Pid,
+    npc_name: String,
+    damage: Int,
+  )
+  Died(pid: process.Pid)
   Down(pid: Option(process.Pid))
 }
 
@@ -255,6 +265,118 @@ pub fn decide(
         }
       }
     }
+    Attack(attacker, target_name, hit) -> {
+      case dict.get(state.occupants, attacker) {
+        Error(_) -> {
+          let logs = [
+            log.Line(woof.Debug, "attacker not present in room on attack", [
+              log.occupant_pid(attacker),
+            ]),
+          ]
+          #(state, [], logs)
+        }
+        Ok(attacker_occupant) ->
+          case find_npc(state.occupants, target_name) {
+            Error(_) -> {
+              let logs = [
+                log.Line(woof.Debug, "attack target not found", [
+                  log.occupant_name(attacker_occupant.name),
+                  woof.str("target_name", target_name),
+                ]),
+              ]
+              #(state, [Tell(attacker, event.AttackFailed(target_name))], logs)
+            }
+            Ok(target) -> {
+              let damage = case hit {
+                True -> combat.player_damage
+                False -> 0
+              }
+              let outcome = case hit {
+                True -> event.YouHitNpc(target.name, damage)
+                False -> event.YouMissedNpc(target.name)
+              }
+              let actions = [
+                Tell(attacker, outcome),
+                Tell(
+                  target.pid,
+                  event.NpcAttacked(
+                    attacker_name: attacker_occupant.name,
+                    attacker_pid: attacker_occupant.pid,
+                    damage:,
+                  ),
+                ),
+              ]
+              let logs = [
+                log.Line(woof.Debug, "player attacked npc", [
+                  log.occupant_name(attacker_occupant.name),
+                  log.occupant_name(target.name),
+                  woof.bool("hit", hit),
+                ]),
+              ]
+              #(state, actions, logs)
+            }
+          }
+      }
+    }
+    NpcAttack(npc_pid, target_pid, npc_name, damage) ->
+      case dict.get(state.occupants, target_pid) {
+        Ok(target) ->
+          case target.kind {
+            event.Player -> {
+              let logs = [
+                log.Line(woof.Debug, "npc attacked player", [
+                  log.occupant_name(npc_name),
+                  log.occupant_name(target.name),
+                  woof.int("damage", damage),
+                ]),
+              ]
+              #(
+                state,
+                [Tell(target_pid, event.NpcHitYou(npc_name, damage))],
+                logs,
+              )
+            }
+            event.Npc -> #(state, [], [])
+          }
+        Error(_) -> {
+          // The target left the room (or died): tell the NPC to stop chasing it.
+          let logs = [
+            log.Line(woof.Debug, "npc attack target not present in room", [
+              log.occupant_name(npc_name),
+              log.occupant_pid(target_pid),
+            ]),
+          ]
+          #(state, [Tell(npc_pid, event.NpcTargetGone)], logs)
+        }
+      }
+    Died(pid) -> {
+      case dict.get(state.occupants, pid) {
+        Ok(occupant) -> {
+          let occupants = dict.delete(state.occupants, pid)
+          let tells =
+            broadcast(
+              occupants,
+              event.OccupantDied(occupant.name, occupant.kind),
+            )
+          let logs = [
+            log.Line(woof.Debug, "occupant died", [
+              log.occupant_name(occupant.name),
+              log.occupant_pid(occupant.pid),
+              log.occupant_kind(occupant.kind),
+            ]),
+          ]
+          #(State(..state, occupants:), tells, logs)
+        }
+        Error(_) -> {
+          let logs = [
+            log.Line(woof.Debug, "occupant not present in room on death", [
+              log.occupant_pid(pid),
+            ]),
+          ]
+          #(state, [], logs)
+        }
+      }
+    }
     Down(Some(pid)) -> {
       let #(state, actions, logs) = decide(state, Leave(pid))
       let down =
@@ -263,6 +385,31 @@ pub fn decide(
     }
     Down(None) -> #(state, [], [])
   }
+}
+
+fn find_npc(
+  occupants: Dict(process.Pid, Occupant),
+  target_name: String,
+) -> Result(Occupant, Nil) {
+  occupants
+  |> dict.values
+  |> list.find(fn(occupant) {
+    case occupant.kind {
+      event.Npc -> matches_name(occupant.name, target_name)
+      event.Player -> False
+    }
+  })
+}
+
+// Players should not have to type the article: "attack goblin" and
+// "attack a goblin" both find the same NPC.
+fn matches_name(occupant_name: String, target_name: String) -> Bool {
+  let name = string.lowercase(occupant_name)
+  let target = string.lowercase(target_name)
+  name == target
+  || name == "a " <> target
+  || name == "an " <> target
+  || name == "the " <> target
 }
 
 fn you_are_in(state: State) -> event.RoomEvent {
@@ -386,6 +533,39 @@ pub fn say(
 ) -> Nil {
   case checked_named_subject(room_name) {
     Ok(subject) -> actor.send(subject, Say(speaker:, text:))
+    Error(_) -> Nil
+  }
+}
+
+pub fn attack(
+  room_name: process.Name(Message),
+  attacker: process.Pid,
+  target_name: String,
+  hit: Bool,
+) -> Nil {
+  case checked_named_subject(room_name) {
+    Ok(subject) -> actor.send(subject, Attack(attacker:, target_name:, hit:))
+    Error(_) -> Nil
+  }
+}
+
+pub fn npc_attack(
+  room_name: process.Name(Message),
+  npc_pid: process.Pid,
+  target_pid: process.Pid,
+  npc_name: String,
+  damage: Int,
+) -> Nil {
+  case checked_named_subject(room_name) {
+    Ok(subject) ->
+      actor.send(subject, NpcAttack(npc_pid:, target_pid:, npc_name:, damage:))
+    Error(_) -> Nil
+  }
+}
+
+pub fn died(room_name: process.Name(Message), pid: process.Pid) -> Nil {
+  case checked_named_subject(room_name) {
+    Ok(subject) -> actor.send(subject, Died(pid:))
     Error(_) -> Nil
   }
 }
