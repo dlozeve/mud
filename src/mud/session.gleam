@@ -276,18 +276,26 @@ fn player_effects(
   player_state: player.State,
   actions: List(player.Action),
 ) -> List(Effect) {
-  let died = list.any(actions, fn(action) { action == player.Die })
-  let effects =
-    actions
-    |> list.filter(fn(action) { action != player.Die })
-    |> list.map(Do)
+  let #(died, effects) =
+    list.partition(actions, fn(action) {
+      case action {
+        player.Die -> True
+        player.Output(_)
+        | player.Say(_)
+        | player.Move(_)
+        | player.Look
+        | player.WhoIsHere
+        | player.Attack(_) -> False
+      }
+    })
+  let effects = list.map(effects, Do)
   case died {
-    True ->
+    [] -> effects
+    _ ->
       list.append(effects, [
         AnnounceDeath(player_state.room.process_name, player_state.pid),
         Stop,
       ])
-    False -> effects
   }
 }
 
