@@ -166,9 +166,10 @@ pub fn join_failed(
   error: world.JoinError,
 ) -> #(State, List(Effect)) {
   let message = case error {
-    world.NoSuchRoom -> "This room does not exist."
-    world.AlreadyLoggedIn ->
-      "This name is already in use. Choose another name: "
+    world.NoSuchRoom(room_id) ->
+      "The room " <> room.id_to_string(room_id) <> " does not exist."
+    world.AlreadyLoggedIn(name) ->
+      "The name " <> name <> " is already in use. Choose another name: "
   }
   #(State(..state, status: AwaitingName), [Do(player.Output(message))])
 }

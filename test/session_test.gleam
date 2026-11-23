@@ -166,12 +166,13 @@ pub fn receive_bytes_while_joining_is_ignored_test() -> Nil {
 
 pub fn join_failed_test() -> Nil {
   let state = joining_state()
-  let #(new_state, effects) = session.join_failed(state, world.AlreadyLoggedIn)
+  let #(new_state, effects) =
+    session.join_failed(state, world.AlreadyLoggedIn("Alice"))
   assert new_state.status == session.AwaitingName
   assert effects
     == [
       session.Do(player.Output(
-        "This name is already in use. Choose another name: ",
+        "The name Alice is already in use. Choose another name: ",
       )),
     ]
 }
@@ -378,10 +379,13 @@ pub fn join_error_returns_to_awaiting_name_test() -> Nil {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      session.WorldMessage(world.Joined(Error(world.NoSuchRoom))),
+      session.WorldMessage(
+        world.Joined(Error(world.NoSuchRoom(state.entrance))),
+      ),
     )
 
-  assert effects == [session.Do(player.Output("This room does not exist."))]
+  assert effects
+    == [session.Do(player.Output("The room entrance does not exist."))]
   assert new_state.status == session.AwaitingName
 }
 
@@ -391,13 +395,13 @@ pub fn join_name_taken_test() -> Nil {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      session.WorldMessage(world.Joined(Error(world.AlreadyLoggedIn))),
+      session.WorldMessage(world.Joined(Error(world.AlreadyLoggedIn("Alice")))),
     )
 
   assert effects
     == [
       session.Do(player.Output(
-        "This name is already in use. Choose another name: ",
+        "The name Alice is already in use. Choose another name: ",
       )),
     ]
   assert new_state.status == session.AwaitingName
@@ -409,7 +413,9 @@ pub fn join_error_when_already_in_game_is_ignored_test() -> Nil {
   let #(new_state, effects) =
     session.receive_message(
       state,
-      session.WorldMessage(world.Joined(Error(world.NoSuchRoom))),
+      session.WorldMessage(
+        world.Joined(Error(world.NoSuchRoom(state.entrance))),
+      ),
     )
 
   // A late error must not demote a player who is already in the game, or the
@@ -467,7 +473,10 @@ pub fn move_error_test() -> Nil {
       state,
       session.WorldMessage(world.Moved(
         entrance.id,
-        Error(world.NonExistingExit),
+        Error(world.NonExistingExit(
+          from: entrance.id,
+          direction: direction.North,
+        )),
       )),
     )
 
@@ -485,7 +494,10 @@ pub fn move_error_from_a_stale_room_is_ignored_test() -> Nil {
       state,
       session.WorldMessage(world.Moved(
         entrance.id,
-        Error(world.NonExistingExit),
+        Error(world.NonExistingExit(
+          from: entrance.id,
+          direction: direction.North,
+        )),
       )),
     )
 

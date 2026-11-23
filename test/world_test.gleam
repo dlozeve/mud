@@ -82,7 +82,7 @@ pub fn join_unknown_room_test() -> Nil {
     )
 
   assert actions
-    == [world.JoinReply(reply_to, world.Joined(Error(world.NoSuchRoom)))]
+    == [world.JoinReply(reply_to, world.Joined(Error(world.NoSuchRoom(r2))))]
   assert new_state == state
 }
 
@@ -129,7 +129,10 @@ pub fn join_while_already_logged_in_test() -> Nil {
 
   assert actions
     == [
-      world.JoinReply(reply_to, world.Joined(Error(world.AlreadyLoggedIn))),
+      world.JoinReply(
+        reply_to,
+        world.Joined(Error(world.AlreadyLoggedIn("Alice"))),
+      ),
     ]
   // The existing session keeps the name.
   assert new_state.players == dict.from_list([#("alice", other_pid)])
@@ -245,7 +248,13 @@ pub fn move_without_an_exit_test() -> Nil {
     == [
       world.MoveReply(
         reply_to,
-        world.Moved(entrance.id, Error(world.NonExistingExit)),
+        world.Moved(
+          entrance.id,
+          Error(world.NonExistingExit(
+            from: entrance.id,
+            direction: direction.West,
+          )),
+        ),
       ),
     ]
   assert new_state == state
@@ -271,7 +280,10 @@ pub fn move_into_a_missing_room_test() -> Nil {
     == [
       world.MoveReply(
         reply_to,
-        world.Moved(entrance.id, Error(world.NonExistingRoom)),
+        world.Moved(
+          entrance.id,
+          Error(world.NonExistingRoom(room.new_id("r2"))),
+        ),
       ),
     ]
   assert new_state == state
@@ -294,7 +306,7 @@ pub fn move_from_an_unknown_room_test() -> Nil {
 
   let assert [world.MoveReply(new_reply_to, world.Moved(_id, e))] = actions
   assert new_reply_to == reply_to
-  assert e == Error(world.NonExistingRoom)
+  assert e == Error(world.NonExistingRoom(room.new_id("unknown")))
   assert new_state == state
 }
 

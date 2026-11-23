@@ -462,8 +462,6 @@ pub fn world_down_reports_and_session_drops_cleanly_test() -> Nil {
 
 // ----- T3: eviction ----------------------------------------------------
 
-const name_in_use = "This name is already in use. Choose another name: "
-
 // The room and the world both discover a dead player through monitors, but
 // their DOWN messages are independent. The room can broadcast the departure
 // before the world has freed the name, so retry the join for a short while.
@@ -478,7 +476,8 @@ fn join_with_retry_attempt(
   attempts: Int,
 ) -> Nil {
   let joined = you_are_in(room) <> "\n"
-  let in_use = name_in_use <> "\n"
+  let in_use =
+    "The name " <> name <> " is already in use. Choose another name: " <> "\n"
   send_line(client, name)
   case process.receive(client.events, 2000) {
     Ok(Output(_, actual)) if actual == joined -> Nil
