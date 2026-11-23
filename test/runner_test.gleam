@@ -26,7 +26,6 @@ fn state_with(status: session.Status) -> session.State {
     entrance: room.new_id("entrance"),
     status: status,
     buffer: <<>>,
-    room_watch: None,
   )
 }
 
@@ -159,7 +158,8 @@ pub fn join_schedules_a_timeout_test() -> Nil {
 
 pub fn announce_death_continues_to_later_effects_test() -> Nil {
   let target_room = room_def("room")
-  let state = state_with(session.InGame(player_in(target_room)))
+  let state =
+    state_with(session.InGame(player_in(target_room), room_watch: None))
   let sent = process.new_subject()
   let scheduled = process.new_subject()
 
@@ -180,7 +180,8 @@ pub fn announce_death_continues_to_later_effects_test() -> Nil {
 
 pub fn attack_continues_to_later_effects_test() -> Nil {
   let target_room = room_def("room")
-  let state = state_with(session.InGame(player_in(target_room)))
+  let state =
+    state_with(session.InGame(player_in(target_room), room_watch: None))
   let sent = process.new_subject()
   let scheduled = process.new_subject()
 
@@ -201,7 +202,8 @@ pub fn attack_continues_to_later_effects_test() -> Nil {
 
 pub fn unavailable_room_schedules_retry_test() -> Nil {
   let target_room = room_def("unavailable")
-  let state = state_with(session.InGame(player_in(target_room)))
+  let state =
+    state_with(session.InGame(player_in(target_room), room_watch: None))
   let sent = process.new_subject()
   let scheduled = process.new_subject()
 

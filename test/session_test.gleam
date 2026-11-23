@@ -76,7 +76,6 @@ fn state_with_world(
     entrance: room.new_id("entrance"),
     status: status,
     buffer: <<>>,
-    room_watch: None,
   )
 }
 
@@ -95,7 +94,7 @@ fn in_game_state() -> session.State {
 fn in_room_state(room: room.Def) -> session.State {
   let world_name = process.new_name("world")
   let player_state = player.new(process.self(), "Alice", room)
-  state_with_world(world_name, session.InGame(player_state))
+  state_with_world(world_name, session.InGame(player_state, room_watch: None))
 }
 
 fn effects(r: #(session.State, List(session.Effect))) -> List(session.Effect) {
@@ -181,7 +180,7 @@ pub fn join_failed_test() -> Nil {
 
 pub fn receive_bytes_in_game_test() -> Nil {
   let state = in_game_state()
-  let assert session.InGame(player_state) = state.status
+  let assert session.InGame(player_state, _) = state.status
   assert session.receive_bytes(state, <<"say hi\n">>) |> effects
     == [session.Do(player.Say("hi"))]
   assert session.receive_bytes(state, <<"quit\n">>) |> effects
@@ -236,7 +235,7 @@ pub fn receive_bytes_incomplete_line_over_limit_test() -> Nil {
 
 pub fn receive_message_test() -> Nil {
   let state = in_game_state()
-  let assert session.InGame(player_state) = state.status
+  let assert session.InGame(player_state, _) = state.status
   assert session.receive_message(
       state,
       session.RoomMessage(player_state.room.id, event.YouSaid("hi")),
@@ -279,7 +278,7 @@ pub fn receive_message_in_joining_test() -> Nil {
 
 pub fn receive_message_damage_reduces_hp_test() -> Nil {
   let state = in_game_state()
-  let assert session.InGame(player_state) = state.status
+  let assert session.InGame(player_state, _) = state.status
 
   let #(new_state, effects) =
     session.receive_message(
@@ -292,13 +291,13 @@ pub fn receive_message_damage_reduces_hp_test() -> Nil {
       session.Do(player.Output("A goblin hits you for 10 damage.")),
       session.Do(player.Output("You have 90/100 hp.")),
     ]
-  let assert session.InGame(new_player_state) = new_state.status
-  assert new_player_state.hp == 90
+  let assert session.InGame(new_player_state, _) = new_state.status
+  assert new_player_state.health == player.Alive(90)
 }
 
 pub fn receive_message_lethal_damage_dies_and_announces_test() -> Nil {
   let state = in_game_state()
-  let assert session.InGame(player_state) = state.status
+  let assert session.InGame(player_state, _) = state.status
 
   let #(new_state, effects) =
     session.receive_message(
@@ -315,8 +314,8 @@ pub fn receive_message_lethal_damage_dies_and_announces_test() -> Nil {
       session.AnnounceDeath(player_state.room.process_name, player_state.pid),
       session.Stop,
     ]
-  let assert session.InGame(new_player_state) = new_state.status
-  assert new_player_state.hp == 0
+  let assert session.InGame(new_player_state, _) = new_state.status
+  assert new_player_state.health == player.Dead
 }
 
 pub fn receive_message_damage_from_a_stale_room_is_ignored_test() -> Nil {
@@ -331,7 +330,7 @@ pub fn receive_message_damage_from_a_stale_room_is_ignored_test() -> Nil {
 
 pub fn receive_message_npc_only_event_is_ignored_test() -> Nil {
   let state = in_game_state()
-  let assert session.InGame(player_state) = state.status
+  let assert session.InGame(player_state, _) = state.status
   assert session.receive_message(
       state,
       session.RoomMessage(player_state.room.id, event.NpcTargetGone),
@@ -353,7 +352,7 @@ pub fn join_reply_starts_the_game_test() -> Nil {
     )
 
   assert effects == [session.EnterRoom(entrance, 0)]
-  let assert session.InGame(player.State(_pid, name, room, _hp)) =
+  let assert session.InGame(player.State(_pid, name, room, _health), _) =
     new_state.status
   assert name == "Alice"
   assert room == entrance
@@ -437,7 +436,7 @@ pub fn move_reply_relocates_the_player_test() -> Nil {
       session.LeaveRoom(entrance.process_name),
       session.EnterRoom(corridor, 0),
     ]
-  let assert session.InGame(player.State(_pid, name, room, _hp)) =
+  let assert session.InGame(player.State(_pid, name, room, _health), _) =
     new_state.status
   assert name == "Alice"
   assert room == corridor
@@ -549,9 +548,13 @@ pub fn second_move_reply_in_the_same_packet_is_ignored_test() -> Nil {
 
 fn watched_state(room: room.Def, pid: process.Pid) -> session.State {
   let state = in_room_state(room)
+  let assert session.InGame(player_state, _) = state.status
   session.State(
     ..state,
-    room_watch: Some(session.RoomWatch(pid, process.monitor(pid))),
+    status: session.InGame(
+      player_state,
+      room_watch: Some(session.RoomWatch(pid, process.monitor(pid))),
+    ),
   )
 }
 
@@ -564,7 +567,8 @@ pub fn room_down_reenters_the_current_room_test() -> Nil {
     session.receive_message(state, session.RoomDown(Some(me)))
 
   assert effects == [session.EnterRoom(entrance, 0)]
-  assert new_state.room_watch == None
+  let assert session.InGame(_, room_watch) = new_state.status
+  assert room_watch == None
 }
 
 pub fn room_down_from_a_room_we_have_left_is_ignored_test() -> Nil {
@@ -626,7 +630,7 @@ pub fn retry_enter_when_not_in_game_is_ignored_test() -> Nil {
 
 pub fn closed_test() -> Nil {
   let state = in_game_state()
-  let assert session.InGame(player_state) = state.status
+  let assert session.InGame(player_state, _) = state.status
   assert session.closed(state)
     == [session.LeaveRoom(player_state.room.process_name)]
 }
@@ -641,7 +645,7 @@ pub fn closed_in_joining_test() -> Nil {
 
 pub fn to_occupant_test() -> Nil {
   let state = in_game_state()
-  let assert session.InGame(player_state) = state.status
+  let assert session.InGame(player_state, _) = state.status
   let occupant = session.to_occupant(state, player_state)
   assert occupant.pid == player_state.pid
   assert occupant.name == player_state.name

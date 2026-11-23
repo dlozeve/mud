@@ -12,11 +12,16 @@ import mud/room
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  State(pid: process.Pid, name: String, room: room.Def, hp: Int)
+  State(pid: process.Pid, name: String, room: room.Def, health: Health)
+}
+
+pub type Health {
+  Alive(hp: Int)
+  Dead
 }
 
 pub fn new(pid: process.Pid, name: String, room: room.Def) -> State {
-  State(pid:, name:, room:, hp: combat.player_max_hp)
+  State(pid:, name:, room:, health: Alive(combat.player_max_hp))
 }
 
 // ----- Action -----------------------------------------------------------
@@ -81,13 +86,18 @@ fn take_damage(
   name: String,
   damage: Int,
 ) -> #(State, List(Action)) {
-  let hp = int.max(state.hp - damage, 0)
-  case hp {
-    0 -> #(State(..state, hp: 0), [Output("You died"), Die])
-    _ -> #(State(..state, hp:), [
-      Output(render(event.NpcHitYou(name, damage))),
-      Output(hp_line(hp)),
-    ])
+  case state.health {
+    Dead -> #(state, [])
+    Alive(hp) -> {
+      let hp = int.max(hp - damage, 0)
+      case hp {
+        0 -> #(State(..state, health: Dead), [Output("You died"), Die])
+        _ -> #(State(..state, health: Alive(hp)), [
+          Output(render(event.NpcHitYou(name, damage))),
+          Output(hp_line(hp)),
+        ])
+      }
+    }
   }
 }
 

@@ -75,36 +75,39 @@ pub fn run_effects_with(
           run_effects_with(state, send, schedule, rest)
         }
         // A join request is only meaningful while a name is being claimed.
-        session.AwaitingName | session.InGame(_) -> {
+        session.AwaitingName | session.InGame(..) -> {
           skip_effect("join request outside the Joining state")
           run_effects_with(state, send, schedule, rest)
         }
       }
     [session.EnterRoom(to_room, attempt), ..rest] ->
       case state.status, process.named(to_room.process_name) {
-        session.InGame(player), Ok(pid) -> {
+        session.InGame(player, room_watch), Ok(pid) -> {
           logger
           |> woof.log(woof.Info, "entering room", [
             woof.str("to_room", room.id_to_string(to_room.id)),
             woof.int("attempt", attempt),
           ])
-          case state.room_watch {
+          case room_watch {
             Some(session.RoomWatch(_pid, monitor)) ->
               process.demonitor_process(monitor)
             None -> Nil
           }
           let _ =
             room.enter(to_room.process_name, session.to_occupant(state, player))
-          let room_watch =
+          let new_room_watch =
             Some(session.RoomWatch(pid: pid, monitor: process.monitor(pid)))
           run_effects_with(
-            session.State(..state, room_watch:),
+            session.State(
+              ..state,
+              status: session.InGame(player, room_watch: new_room_watch),
+            ),
             send,
             schedule,
             rest,
           )
         }
-        session.InGame(_), Error(_) -> {
+        session.InGame(_, _), Error(_) -> {
           logger
           |> woof.log(woof.Warning, "room process not found, retrying", [
             woof.str("to_room", room.id_to_string(to_room.id)),
@@ -118,7 +121,7 @@ pub fn run_effects_with(
       }
     [session.LeaveRoom(room_name), ..rest] ->
       case state.status {
-        session.InGame(player_state) -> {
+        session.InGame(player_state, _) -> {
           logger |> woof.log(woof.Info, "leaving room", [])
           let _ = room.leave(room_name, player_state.pid)
           run_effects_with(state, send, schedule, rest)
@@ -237,7 +240,7 @@ fn current_player(state: session.State) -> Result(player.State, Nil) {
   case state.status {
     session.AwaitingName -> Error(Nil)
     session.Joining(_) -> Error(Nil)
-    session.InGame(player) -> Ok(player)
+    session.InGame(player, _) -> Ok(player)
   }
 }
 
@@ -249,7 +252,7 @@ pub fn player_logger(state: session.State) -> woof.Logger {
     session.AwaitingName -> log.player_logger("AwaitingName", [])
     session.Joining(name:) ->
       log.player_logger("Joining", [log.occupant_name(name)])
-    session.InGame(player:) ->
+    session.InGame(player:, ..) ->
       log.player_logger("InGame", [
         log.pid(player.pid),
         log.occupant_name(player.name),

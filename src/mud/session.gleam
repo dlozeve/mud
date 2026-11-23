@@ -21,14 +21,13 @@ pub type State {
     entrance: room.Id,
     status: Status,
     buffer: BitArray,
-    room_watch: Option(RoomWatch),
   )
 }
 
 pub type Status {
   AwaitingName
   Joining(name: String)
-  InGame(player: player.State)
+  InGame(player: player.State, room_watch: Option(RoomWatch))
 }
 
 pub type RoomWatch {
@@ -72,7 +71,6 @@ pub fn started(
       entrance: entrance,
       status: AwaitingName,
       buffer: <<>>,
-      room_watch: None,
     )
   let effects = [
     Do(player.Output("Welcome to the dungeon! What is your name?")),
@@ -84,7 +82,7 @@ pub fn closed(state: State) -> List(Effect) {
   case state.status {
     AwaitingName -> []
     Joining(_) -> []
-    InGame(player_state) -> [LeaveRoom(player_state.room.process_name)]
+    InGame(player_state, _) -> [LeaveRoom(player_state.room.process_name)]
   }
 }
 
@@ -122,7 +120,7 @@ fn handle_line(state: State, line: String) -> #(State, List(Effect)) {
       }
     }
     Joining(_) -> #(state, [])
-    InGame(player_state) ->
+    InGame(player_state, room_watch) ->
       case command.parse(line) {
         command.Quit -> #(state, [
           LeaveRoom(player_state.room.process_name),
@@ -131,7 +129,10 @@ fn handle_line(state: State, line: String) -> #(State, List(Effect)) {
         parsed -> {
           let #(player_state, actions) =
             player.decide_command(player_state, parsed)
-          #(State(..state, status: InGame(player_state)), list.map(actions, Do))
+          #(
+            State(..state, status: InGame(player_state, room_watch)),
+            list.map(actions, Do),
+          )
         }
       }
   }
@@ -181,15 +182,15 @@ pub fn receive_message(
     WorldMessage(reply) -> receive_reply(state, reply)
     RoomMessage(room_id, room_event) ->
       case state.status {
-        InGame(player_state) if player_state.room.id == room_id -> {
+        InGame(player_state, room_watch) if player_state.room.id == room_id -> {
           let #(player_state, actions) = player.decide(player_state, room_event)
           #(
-            State(..state, status: InGame(player_state)),
+            State(..state, status: InGame(player_state, room_watch)),
             player_effects(player_state, actions),
           )
         }
         // Message from a stale room that has not updated its occupancy, ignored.
-        InGame(_) -> #(state, [])
+        InGame(..) -> #(state, [])
         AwaitingName -> #(state, [])
         Joining(_) -> #(state, [])
       }
@@ -198,28 +199,27 @@ pub fn receive_message(
         Joining(_) -> #(State(..state, status: AwaitingName), [
           Do(player.Output("The world is not answering, try again: ")),
         ])
-        AwaitingName | InGame(_) -> #(state, [])
+        AwaitingName | InGame(..) -> #(state, [])
       }
     RoomDown(Some(pid)) ->
-      case state.status, state.room_watch {
-        InGame(player_state), Some(RoomWatch(watched_pid, _))
+      case state.status {
+        InGame(player_state, Some(RoomWatch(watched_pid, _)))
           if pid == watched_pid
-        -> #(State(..state, room_watch: None), [
+        -> #(State(..state, status: InGame(player_state, room_watch: None)), [
           EnterRoom(player_state.room, attempt: 0),
         ])
-        InGame(_), Some(RoomWatch(..)) -> #(state, [])
-        InGame(_), None -> #(state, [])
-        AwaitingName, _ -> #(state, [])
-        Joining(_), _ -> #(state, [])
+        InGame(_, _) -> #(state, [])
+        AwaitingName -> #(state, [])
+        Joining(_) -> #(state, [])
       }
     RoomDown(None) -> #(state, [])
     RetryEnter(room, attempt) ->
       case state.status {
-        InGame(_) if attempt > max_enter_attempts -> #(state, [
+        InGame(_, _) if attempt > max_enter_attempts -> #(state, [
           Do(player.Output("The room is not available. Disconnecting.")),
           Stop,
         ])
-        InGame(_) -> #(state, [
+        InGame(_, _) -> #(state, [
           EnterRoom(room, attempt),
         ])
         AwaitingName | Joining(_) -> #(state, [])
@@ -233,38 +233,38 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
       case state.status {
         Joining(name:) -> {
           let player_state = player.new(process.self(), name, room)
-          #(State(..state, status: InGame(player_state)), [
+          #(State(..state, status: InGame(player_state, room_watch: None)), [
             EnterRoom(room, attempt: 0),
           ])
         }
         AwaitingName -> #(state, [])
-        InGame(_) -> #(state, [])
+        InGame(..) -> #(state, [])
       }
     world.Joined(Error(join_error)) ->
       case state.status {
         Joining(_) -> join_failed(state, join_error)
-        AwaitingName | InGame(_) -> #(state, [])
+        AwaitingName | InGame(..) -> #(state, [])
       }
     world.Moved(from, Ok(to_room)) ->
       case state.status {
-        InGame(player_state) if player_state.room.id == from -> {
+        InGame(player_state, room_watch) if player_state.room.id == from -> {
           let from_room = player_state.room
           let new_player_state = player.State(..player_state, room: to_room)
-          #(State(..state, status: InGame(new_player_state)), [
+          #(State(..state, status: InGame(new_player_state, room_watch)), [
             LeaveRoom(from_room.process_name),
             EnterRoom(to_room, attempt: 0),
           ])
         }
         // stale reply, ignore
-        InGame(_) -> #(state, [])
+        InGame(..) -> #(state, [])
         AwaitingName | Joining(_) -> #(state, [])
       }
     world.Moved(from, Error(_move_error)) ->
       case state.status {
-        InGame(player_state) if player_state.room.id == from -> #(state, [
+        InGame(player_state, _) if player_state.room.id == from -> #(state, [
           Do(player.Output("You can't go that way.")),
         ])
-        InGame(_) | AwaitingName | Joining(_) -> #(state, [])
+        InGame(..) | AwaitingName | Joining(_) -> #(state, [])
       }
   }
 }
