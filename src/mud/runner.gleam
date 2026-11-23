@@ -111,7 +111,8 @@ pub fn run_effects_with(
           schedule(state.subject, 100, session.RetryEnter(to_room, attempt + 1))
           run_effects_with(state, send, schedule, rest)
         }
-        _, _ -> run_effects_with(state, send, schedule, rest)
+        session.AwaitingName, _ -> run_effects_with(state, send, schedule, rest)
+        session.Joining(_), _ -> run_effects_with(state, send, schedule, rest)
       }
     [session.LeaveRoom(room_name), ..rest] ->
       case state.status {
@@ -120,7 +121,8 @@ pub fn run_effects_with(
           room.leave(room_name, player_state.pid)
           run_effects_with(state, send, schedule, rest)
         }
-        _ -> run_effects_with(state, send, schedule, rest)
+        session.AwaitingName | session.Joining(_) ->
+          run_effects_with(state, send, schedule, rest)
       }
     [session.AnnounceDeath(room_name, pid), ..rest] -> {
       logger |> woof.log(woof.Info, "died", [])

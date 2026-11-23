@@ -60,7 +60,17 @@ pub fn decide(state: State, room_event: RoomEvent) -> #(State, List(Action)) {
     event.NpcHitYou(name, damage) -> take_damage(state, name, damage)
     // Combat events addressed to an NPC; a player never receives these.
     event.NpcAttacked(..) | event.NpcTargetGone -> #(state, [])
-    _ -> #(state, [Output(render(room_event))])
+    // Every other event is rendered as text for the player.
+    event.YouAreIn(..)
+    | event.OccupantArrived(..)
+    | event.OccupantLeft(..)
+    | event.OccupantDied(..)
+    | event.YouSaid(..)
+    | event.OccupantSaid(..)
+    | event.OccupantList(..)
+    | event.AttackFailed(..)
+    | event.YouHitNpc(..)
+    | event.YouMissedNpc(..) -> #(state, [Output(render(room_event))])
   }
 }
 
@@ -131,7 +141,8 @@ fn describe_exits(exits: List(Direction)) -> String {
     list.partition(exits, fn(dir) {
       case dir {
         direction.Up | direction.Down -> True
-        _ -> False
+        direction.North | direction.East | direction.South | direction.West ->
+          False
       }
     })
   case describe_doorways(doorways), describe_staircases(staircases) {

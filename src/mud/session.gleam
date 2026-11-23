@@ -145,7 +145,16 @@ fn valid_name(line: String) -> Result(String, Nil) {
       case command.parse(line) {
         command.Unknown(_) -> Ok(line)
         // Valid commands are not valid names
-        _ -> Error(Nil)
+        command.Help
+        | command.Say(_)
+        | command.Go(_)
+        | command.Look
+        | command.WhoIsHere
+        | command.Attack(_)
+        | command.Quit
+        | command.BadDirection(_)
+        | command.MissingDirection
+        | command.MissingTarget -> Error(Nil)
       }
     False -> Error(Nil)
   }
@@ -189,7 +198,7 @@ pub fn receive_message(
         Joining(_) -> #(State(..state, status: AwaitingName), [
           Do(player.Output("The world is not answering, try again: ")),
         ])
-        _ -> #(state, [])
+        AwaitingName | InGame(_) -> #(state, [])
       }
     RoomDown(Some(pid)) ->
       case state.status, state.room_watch {
@@ -198,7 +207,10 @@ pub fn receive_message(
         -> #(State(..state, room_watch: None), [
           EnterRoom(player_state.room, attempt: 0),
         ])
-        _, _ -> #(state, [])
+        InGame(_), Some(RoomWatch(..)) -> #(state, [])
+        InGame(_), None -> #(state, [])
+        AwaitingName, _ -> #(state, [])
+        Joining(_), _ -> #(state, [])
       }
     RoomDown(None) -> #(state, [])
     RetryEnter(room, attempt) ->
@@ -210,7 +222,7 @@ pub fn receive_message(
         InGame(_) -> #(state, [
           EnterRoom(room, attempt),
         ])
-        _ -> #(state, [])
+        AwaitingName | Joining(_) -> #(state, [])
       }
   }
 }
@@ -231,7 +243,7 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
     world.Joined(Error(join_error)) ->
       case state.status {
         Joining(_) -> join_failed(state, join_error)
-        _ -> #(state, [])
+        AwaitingName | InGame(_) -> #(state, [])
       }
     world.Moved(from, Ok(to_room)) ->
       case state.status {
@@ -245,14 +257,14 @@ fn receive_reply(state: State, reply: world.Reply) -> #(State, List(Effect)) {
         }
         // stale reply, ignore
         InGame(_) -> #(state, [])
-        _ -> #(state, [])
+        AwaitingName | Joining(_) -> #(state, [])
       }
     world.Moved(from, Error(_move_error)) ->
       case state.status {
         InGame(player_state) if player_state.room.id == from -> #(state, [
           Do(player.Output("You can't go that way.")),
         ])
-        _ -> #(state, [])
+        InGame(_) | AwaitingName | Joining(_) -> #(state, [])
       }
   }
 }

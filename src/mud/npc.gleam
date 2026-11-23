@@ -118,10 +118,19 @@ fn decide_room_event(
   state: State,
   room_event: event.RoomEvent,
 ) -> #(State, List(Action), List(log.Line)) {
-  case state.status, room_event {
+  case state.status {
     // A dead NPC has nothing left to react to.
-    Dead, _ -> #(state, [], [])
-    _, event.NpcAttacked(attacker_name, attacker_pid, damage) -> {
+    Dead -> #(state, [], [])
+    Alive(_) | Attacking(..) -> decide_live_room_event(state, room_event)
+  }
+}
+
+fn decide_live_room_event(
+  state: State,
+  room_event: event.RoomEvent,
+) -> #(State, List(Action), List(log.Line)) {
+  case room_event {
+    event.NpcAttacked(attacker_name, attacker_pid, damage) -> {
       let hp = case state.status {
         Alive(hp) | Attacking(hp, _) -> hp
         Dead -> 0
@@ -150,12 +159,25 @@ fn decide_room_event(
       }
     }
     // The target left the room or died: go back to idling.
-    Attacking(hp, _), event.NpcTargetGone -> #(
-      State(..state, status: Alive(hp)),
-      [],
-      [log.Line(woof.Debug, "attack target gone", [])],
-    )
-    _, _ -> #(state, [], [])
+    event.NpcTargetGone ->
+      case state.status {
+        Attacking(hp, _) -> #(State(..state, status: Alive(hp)), [], [
+          log.Line(woof.Debug, "attack target gone", []),
+        ])
+        Alive(_) | Dead -> #(state, [], [])
+      }
+    // Everything else is not addressed to an NPC.
+    event.YouAreIn(..)
+    | event.OccupantArrived(..)
+    | event.OccupantLeft(..)
+    | event.OccupantDied(..)
+    | event.YouSaid(..)
+    | event.OccupantSaid(..)
+    | event.OccupantList(..)
+    | event.AttackFailed(..)
+    | event.YouHitNpc(..)
+    | event.YouMissedNpc(..)
+    | event.NpcHitYou(..) -> #(state, [], [])
   }
 }
 
