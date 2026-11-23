@@ -260,7 +260,7 @@ pub fn attack_a_missing_npc_tells_the_attacker_test() -> Nil {
   let alice = occupant_with("Alice")
   let state = state_with([alice])
   let #(_state, actions, _logs) =
-    room.decide(state, room.Attack(alice.pid, "goblin", True))
+    room.decide(state, room.Attack(alice.pid, "goblin", combat.Hit))
   assert actions == [room.Tell(alice.pid, event.AttackFailed("goblin"))]
 }
 
@@ -269,7 +269,7 @@ pub fn attack_hits_the_npc_test() -> Nil {
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
   let #(_state, actions, _logs) =
-    room.decide(state, room.Attack(alice.pid, "a goblin", True))
+    room.decide(state, room.Attack(alice.pid, "a goblin", combat.Hit))
   assert set.from_list(actions)
     == set.from_list([
       room.Tell(alice.pid, event.YouHitNpc("a goblin", combat.player_damage)),
@@ -285,7 +285,7 @@ pub fn attack_misses_the_npc_test() -> Nil {
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
   let #(_state, actions, _logs) =
-    room.decide(state, room.Attack(alice.pid, "a goblin", False))
+    room.decide(state, room.Attack(alice.pid, "a goblin", combat.Miss))
   assert set.from_list(actions)
     == set.from_list([
       room.Tell(alice.pid, event.YouMissedNpc("a goblin")),
@@ -298,7 +298,7 @@ pub fn attack_can_omit_the_article_test() -> Nil {
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
   let #(_state, actions, _logs) =
-    room.decide(state, room.Attack(alice.pid, "goblin", True))
+    room.decide(state, room.Attack(alice.pid, "goblin", combat.Hit))
   assert set.from_list(actions)
     == set.from_list([
       room.Tell(alice.pid, event.YouHitNpc("a goblin", combat.player_damage)),
@@ -314,7 +314,7 @@ pub fn attack_does_not_target_players_test() -> Nil {
   let bob = occupant_with("Bob")
   let state = state_with([alice, bob])
   let #(_state, actions, _logs) =
-    room.decide(state, room.Attack(alice.pid, "Bob", True))
+    room.decide(state, room.Attack(alice.pid, "Bob", combat.Hit))
   assert actions == [room.Tell(alice.pid, event.AttackFailed("Bob"))]
 }
 
@@ -323,7 +323,7 @@ pub fn attack_by_a_non_occupant_is_ignored_test() -> Nil {
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
   let #(_state, actions, _logs) =
-    room.decide(state, room.Attack(process.self(), "a goblin", True))
+    room.decide(state, room.Attack(process.self(), "a goblin", combat.Hit))
   assert actions == []
 }
 

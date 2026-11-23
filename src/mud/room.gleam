@@ -76,7 +76,11 @@ pub type Message {
   Look(pid: process.Pid)
   WhoIsHere(pid: process.Pid)
   Say(speaker: process.Pid, text: String)
-  Attack(attacker: process.Pid, target_name: String, hit: Bool)
+  Attack(
+    attacker: process.Pid,
+    target_name: String,
+    outcome: combat.AttackOutcome,
+  )
   NpcAttack(
     npc_pid: process.Pid,
     target_pid: process.Pid,
@@ -266,7 +270,7 @@ pub fn decide(
         }
       }
     }
-    Attack(attacker, target_name, hit) -> {
+    Attack(attacker, target_name, attack_outcome) -> {
       case dict.get(state.occupants, attacker) {
         Error(_) -> {
           let logs = [
@@ -288,13 +292,13 @@ pub fn decide(
               #(state, [Tell(attacker, event.AttackFailed(target_name))], logs)
             }
             Ok(target) -> {
-              let damage = case hit {
-                True -> combat.player_damage
-                False -> 0
+              let damage = case attack_outcome {
+                combat.Hit -> combat.player_damage
+                combat.Miss -> 0
               }
-              let outcome = case hit {
-                True -> event.YouHitNpc(target.name, damage)
-                False -> event.YouMissedNpc(target.name)
+              let outcome = case attack_outcome {
+                combat.Hit -> event.YouHitNpc(target.name, damage)
+                combat.Miss -> event.YouMissedNpc(target.name)
               }
               let actions = [
                 Tell(attacker, outcome),
@@ -311,7 +315,7 @@ pub fn decide(
                 log.Line(woof.Debug, "player attacked npc", [
                   log.occupant_name(attacker_occupant.name),
                   log.occupant_name(target.name),
-                  woof.bool("hit", hit),
+                  woof.str("outcome", combat.outcome_to_string(attack_outcome)),
                 ]),
               ]
               #(state, actions, logs)
@@ -544,11 +548,11 @@ pub fn attack(
   room_name: process.Name(Message),
   attacker: process.Pid,
   target_name: String,
-  hit: Bool,
+  outcome: combat.AttackOutcome,
 ) -> Result(Nil, Nil) {
   checked_named_subject(room_name)
   |> result.map(fn(subject) {
-    actor.send(subject, Attack(attacker:, target_name:, hit:))
+    actor.send(subject, Attack(attacker:, target_name:, outcome:))
   })
 }
 

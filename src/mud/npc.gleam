@@ -71,15 +71,15 @@ pub fn decide(
           log.Line(woof.Debug, "ticked", [woof.int("hp", hp)]),
         ])
         Attacking(hp, target) -> {
-          let hit = combat.npc_hits(roll)
-          let attack = case hit {
-            True -> [AttackPlayer(target, combat.npc_damage)]
-            False -> []
+          let attack_outcome = combat.npc_hits(roll)
+          let attack = case attack_outcome {
+            combat.Hit -> [AttackPlayer(target, combat.npc_damage)]
+            combat.Miss -> []
           }
           #(state, list.append(attack, [ScheduleTick(state.tick_ms)]), [
             log.Line(woof.Debug, "ticked", [
               woof.int("hp", hp),
-              woof.bool("hit", hit),
+              woof.str("outcome", combat.outcome_to_string(attack_outcome)),
             ]),
           ])
         }

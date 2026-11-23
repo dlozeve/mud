@@ -178,13 +178,19 @@ fn run_effect(
       })
     player.Attack(name) ->
       with_player(state, action, fn(player) {
-        let hit = combat.player_hits(combat.roll())
+        let attack_outcome = combat.player_hits(combat.roll())
         logger
         |> woof.log(woof.Info, "attacked", [
           woof.str("target", name),
-          woof.bool("hit", hit),
+          woof.str("outcome", combat.outcome_to_string(attack_outcome)),
         ])
-        let _ = room.attack(player.room.process_name, player.pid, name, hit)
+        let _ =
+          room.attack(
+            player.room.process_name,
+            player.pid,
+            name,
+            attack_outcome,
+          )
         Ok(state)
       })
     // The session turns this into `AnnounceDeath` and `Stop` effects.

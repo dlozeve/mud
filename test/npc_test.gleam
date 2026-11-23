@@ -66,7 +66,7 @@ pub fn tick_while_attacking_hits_the_target_test() -> Nil {
     == [
       log.Line(woof.Debug, "ticked", [
         woof.int("hp", 3),
-        woof.bool("hit", True),
+        woof.str("outcome", "hit"),
       ]),
     ]
 }
@@ -80,7 +80,7 @@ pub fn tick_while_attacking_misses_the_target_test() -> Nil {
     == [
       log.Line(woof.Debug, "ticked", [
         woof.int("hp", 3),
-        woof.bool("hit", False),
+        woof.str("outcome", "miss"),
       ]),
     ]
 }
