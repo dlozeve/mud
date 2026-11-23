@@ -52,7 +52,7 @@ entrance = "entrance"          # room id where players spawn
 [[rooms]]
 id = "entrance"
 name = "the dungeon entrance"
-description = "The bottom of an enormous stone staircase."
+description = "A wide stone landing at the head of an enormous staircase."
 [rooms.exits]
 down = "corridor"              # direction = destination room id
 

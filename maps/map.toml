@@ -1,21 +1,450 @@
+# The dungeon is four levels deep.
+#
+#   level 0: the entrance, alone
+#   level 1: the ossuary level
+#   level 2: the cistern level
+#   level 3: the drowned level
+#
+# Every pair of levels is joined by exactly one staircase, and every
+# horizontal exit is mirrored (the loader validates this).
+
 entrance = "entrance"
+
+# ---------------------------------------------------------------------------
+# Level 0: the entrance
+# ---------------------------------------------------------------------------
 
 [[rooms]]
 id = "entrance"
 name = "the dungeon entrance"
-description = "The bottom of an enormous stone staircase. Dark and ominous. Slow rumble coming from below."
+description = "A wide stone landing at the head of an enormous staircase. Dark and ominous. Slow rumble coming from below."
 [rooms.exits]
-down = "corridor"
+down = "stair_landing"
 
+# ---------------------------------------------------------------------------
+# Level 1: the ossuary level (14 rooms)
+# ---------------------------------------------------------------------------
 
 [[rooms]]
-id = "corridor"
-name = "a dimly-lit corridor"
-description = "Long and narrow, with a few torches on the walls. Damp."
+id = "stair_landing"
+name = "the winding stair"
+description = "A spiral of worn steps climbs back up to the entrance. The air already smells of old stone and dust."
 [rooms.exits]
 up = "entrance"
+east = "narrow_gallery"
+
+[[rooms]]
+id = "collapsed_alcove"
+name = "a collapsed alcove"
+description = "Half the ceiling has come down here, leaving a slope of rubble and a few crushed urns."
+[rooms.exits]
+east = "bone_chandelier"
+south = "narrow_gallery"
+
+[[rooms]]
+id = "bone_chandelier"
+name = "the bone chandelier"
+description = "Rib bones and skulls are wired together above the room, swaying faintly though there is no wind."
+[rooms.exits]
+west = "collapsed_alcove"
+south = "dripping_cistern"
+
+[[rooms]]
+id = "narrow_gallery"
+name = "a narrow gallery"
+description = "Portraits faded to grey line the walls, every pair of eyes scratched out."
+[rooms.exits]
+west = "stair_landing"
+east = "dripping_cistern"
+north = "collapsed_alcove"
+south = "flooded_cell"
+
+[[rooms]]
+id = "dripping_cistern"
+name = "the dripping cistern"
+description = "Brown water drips into a cracked basin. The echoes make it sound like footsteps behind you."
+[rooms.exits]
+west = "narrow_gallery"
+east = "torchlit_passage"
+north = "bone_chandelier"
+south = "ossuary"
+
+[[rooms]]
+id = "torchlit_passage"
+name = "a torchlit passage"
+description = "Someone has lit the torches recently. The flames lean away from a draught you cannot feel."
+[rooms.exits]
+west = "dripping_cistern"
+east = "empty_cell"
+south = "collapsed_cell"
+
+[[rooms]]
+id = "empty_cell"
+name = "the empty cell"
+description = "An iron ring is bolted to the wall and the straw has been swept into one corner. The door hangs open."
+[rooms.exits]
+west = "torchlit_passage"
+south = "rubble_bend"
+
+[[rooms]]
+id = "flooded_cell"
+name = "a flooded cell"
+description = "Ankle-deep water covers the flagstones, and something pale moves beneath it whenever you look away."
+[rooms.exits]
+north = "narrow_gallery"
+east = "ossuary"
+
+[[rooms]]
+id = "ossuary"
+name = "the ossuary"
+description = "Femurs are stacked in neat rows along three walls. A narrow path leads between them."
+[rooms.exits]
+west = "flooded_cell"
+east = "collapsed_cell"
+north = "dripping_cistern"
+south = "webbed_corner"
+
+[[rooms]]
+id = "collapsed_cell"
+name = "a collapsed cell"
+description = "The back wall has fallen in, revealing a rough stair that spirals down into the dark."
+[rooms.exits]
+west = "ossuary"
+east = "rubble_bend"
+north = "torchlit_passage"
+south = "silent_vault"
+down = "deep_stair"
+
+[[rooms]]
+id = "rubble_bend"
+name = "a rubble-strewn bend"
+description = "The corridor turns sharply around a heap of broken masonry, and the walls are scored with pick marks."
+[rooms.exits]
+west = "collapsed_cell"
+north = "empty_cell"
+south = "vaulted_dead_end"
+
+[[rooms]]
+id = "webbed_corner"
+name = "the webbed corner"
+description = "Thick grey webs hang from the ceiling in curtains. Small husks dangle among them."
+[rooms.exits]
+north = "ossuary"
+east = "silent_vault"
+
+[[rooms]]
+id = "silent_vault"
+name = "a silent vault"
+description = "The air is cold and perfectly still. Sound seems to die a few feet from your mouth."
+[rooms.exits]
+west = "webbed_corner"
+east = "vaulted_dead_end"
+north = "collapsed_cell"
+
+[[rooms]]
+id = "vaulted_dead_end"
+name = "the vaulted dead end"
+description = "A high vaulted ceiling ends in a blank wall scrawled with old tally marks."
+[rooms.exits]
+west = "silent_vault"
+north = "rubble_bend"
+
+# ---------------------------------------------------------------------------
+# Level 2: the cistern level (16 rooms)
+# ---------------------------------------------------------------------------
+
+[[rooms]]
+id = "low_tunnel"
+name = "a low tunnel"
+description = "You have to stoop to pass. The walls are scratched with claw marks at shoulder height."
+[rooms.exits]
+south = "cistern_overflow"
+
+[[rooms]]
+id = "mushroom_grotto"
+name = "the mushroom grotto"
+description = "Pale blue mushrooms grow from the walls and shed a faint, cold light."
+[rooms.exits]
+east = "slippery_ledge"
+south = "echoing_hall"
+
+[[rooms]]
+id = "slippery_ledge"
+name = "a slippery ledge"
+description = "The floor tilts toward a black crevice, and algae makes every step uncertain."
+[rooms.exits]
+west = "mushroom_grotto"
+south = "sunken_chamber"
+
+[[rooms]]
+id = "cistern_overflow"
+name = "the cistern overflow"
+description = "Water spills from a broken pipe into a shallow pool, filling the room with a steady roar."
+[rooms.exits]
+north = "low_tunnel"
+east = "damp_alcove"
+south = "root_choked_passage"
+
+[[rooms]]
+id = "damp_alcove"
+name = "a damp alcove"
+description = "A narrow niche is lined with damp blankets and the stubs of a dozen candles."
+[rooms.exits]
+west = "cistern_overflow"
+east = "echoing_hall"
+south = "narrow_crawl"
+
+[[rooms]]
+id = "echoing_hall"
+name = "the echoing hall"
+description = "Every footfall returns twice. The hall is far longer than the space below should allow."
+[rooms.exits]
+west = "damp_alcove"
+north = "mushroom_grotto"
+south = "broken_statue"
+
+[[rooms]]
+id = "bone_nook"
+name = "a bone-strewn nook"
+description = "Animal bones are piled against the wall in a rough nest, and the floor is thick with fur."
+[rooms.exits]
+south = "rusted_gate"
+
+[[rooms]]
+id = "narrow_crawl"
+name = "a narrow crawl"
+description = "The passage pinches to the width of your shoulders and opens again just as abruptly."
+[rooms.exits]
+north = "damp_alcove"
+east = "broken_statue"
+
+[[rooms]]
+id = "broken_statue"
+name = "the broken statue"
+description = "A headless figure of grey stone lies in pieces around its pedestal."
+[rooms.exits]
+west = "narrow_crawl"
+east = "sunken_chamber"
+north = "echoing_hall"
+south = "flooded_gallery"
+
+[[rooms]]
+id = "sunken_chamber"
+name = "a sunken chamber"
+description = "The floor has dropped a full step and the whole room collects a film of black water."
+[rooms.exits]
+west = "broken_statue"
+east = "rusted_gate"
+north = "slippery_ledge"
+south = "old_well"
+
+[[rooms]]
+id = "rusted_gate"
+name = "the rusted gate"
+description = "A portcullis has fallen and rusted into the floor, leaving only a narrow gap to squeeze through."
+[rooms.exits]
+west = "sunken_chamber"
+north = "bone_nook"
+south = "deep_stair"
+
+[[rooms]]
+id = "root_choked_passage"
+name = "a root-choked passage"
+description = "Thick white roots have forced their way through the masonry and hang across the way."
+[rooms.exits]
+north = "cistern_overflow"
+south = "muddy_dead_end"
+
+[[rooms]]
+id = "muddy_dead_end"
+name = "the muddy dead end"
+description = "The tunnel ends in a wall of wet clay, and the floor is churned with old footprints."
+[rooms.exits]
+north = "root_choked_passage"
+
+[[rooms]]
+id = "flooded_gallery"
+name = "a flooded gallery"
+description = "Knee-high water fills the gallery. Stone arches vanish beneath the surface in either direction."
+[rooms.exits]
+north = "broken_statue"
+east = "old_well"
+
+[[rooms]]
+id = "old_well"
+name = "the old well"
+description = "A low stone well sits at the centre of the room; a cold draught rises from it."
+[rooms.exits]
+west = "flooded_gallery"
+east = "deep_stair"
+north = "sunken_chamber"
+
+[[rooms]]
+id = "deep_stair"
+name = "the deep stair"
+description = "A broad stair descends into a darkness that swallows torchlight."
+[rooms.exits]
+west = "old_well"
+north = "rusted_gate"
+up = "collapsed_cell"
+down = "bottom_stair"
+
+# ---------------------------------------------------------------------------
+# Level 3: the drowned level (12 rooms)
+# ---------------------------------------------------------------------------
+
+[[rooms]]
+id = "crumbling_arch"
+name = "a crumbling arch"
+description = "A great arch of carved stone has half fallen, leaving a jagged opening overhead."
+[rooms.exits]
+east = "cold_hearth"
+
+[[rooms]]
+id = "cold_hearth"
+name = "the cold hearth"
+description = "A vast hearth is filled with ash and old bones. The chimney above is blocked with rubble."
+[rooms.exits]
+west = "crumbling_arch"
+south = "bottom_stair"
+
+[[rooms]]
+id = "sealed_alcove"
+name = "a sealed alcove"
+description = "Bricks have been mortared across a doorway here, and something scratched at them from the inside."
+[rooms.exits]
+south = "shadowed_niche"
+
+[[rooms]]
+id = "bottom_stair"
+name = "the bottom stair"
+description = "The stair ends here on a landing of cracked tiles. Faint warm air rises from the floor."
+[rooms.exits]
+up = "deep_stair"
+north = "cold_hearth"
+east = "drowned_chapel"
+south = "root_tunnel"
+
+[[rooms]]
+id = "drowned_chapel"
+name = "the drowned chapel"
+description = "Rows of stone pews stand in a shallow pool. A faceless idol waits at the far end."
+[rooms.exits]
+west = "bottom_stair"
+east = "shadowed_niche"
+south = "silent_bell"
+
+[[rooms]]
+id = "shadowed_niche"
+name = "a shadowed niche"
+description = "A niche large enough for a bed holds only a bundle of rags and a broken lamp."
+[rooms.exits]
+west = "drowned_chapel"
+north = "sealed_alcove"
+
+[[rooms]]
+id = "fungus_garden"
+name = "the fungus garden"
+description = "A careful patch of mushrooms has been tended here, each one ringed with white stones."
+[rooms.exits]
+east = "root_tunnel"
+south = "forgotten_cache"
+
+[[rooms]]
+id = "root_tunnel"
+name = "a tunnel of roots"
+description = "The passage is half root and half stone, and the roots are warm to the touch."
+[rooms.exits]
+west = "fungus_garden"
+east = "silent_bell"
+north = "bottom_stair"
+
+[[rooms]]
+id = "silent_bell"
+name = "the silent bell"
+description = "A bronze bell hangs from the ceiling without a rope. Its surface is covered in handprints."
+[rooms.exits]
+west = "root_tunnel"
+north = "drowned_chapel"
+south = "warm_vent"
+
+[[rooms]]
+id = "forgotten_cache"
+name = "the forgotten cache"
+description = "Rotting sacks and a smashed crate suggest someone once stored supplies here."
+[rooms.exits]
+north = "fungus_garden"
+
+[[rooms]]
+id = "warm_vent"
+name = "a warm vent"
+description = "A crack in the floor exhales warm, sulphur-smelling air in slow pulses."
+[rooms.exits]
+north = "silent_bell"
+east = "final_threshold"
+
+[[rooms]]
+id = "final_threshold"
+name = "the final threshold"
+description = "A blank stone door stands at the end of the room, its handle worn smooth by hands."
+[rooms.exits]
+west = "warm_vent"
+
+# ---------------------------------------------------------------------------
+# NPCs: roughly one room in four, never more than one per room
+# ---------------------------------------------------------------------------
 
 [[npcs]]
-id = "goblin"
-name = "a goblin"
-room = "corridor"
+id = "ghoul"
+name = "a pale ghoul"
+room = "bone_chandelier"
+
+[[npcs]]
+id = "leech"
+name = "a giant leech"
+room = "flooded_cell"
+
+[[npcs]]
+id = "sentinel"
+name = "a rusted sentinel"
+room = "silent_vault"
+
+[[npcs]]
+id = "oracle"
+name = "a blind oracle"
+room = "damp_alcove"
+
+[[npcs]]
+id = "gargoyle"
+name = "a stone gargoyle"
+room = "broken_statue"
+
+[[npcs]]
+id = "gnoll"
+name = "a scrawny gnoll"
+room = "rusted_gate"
+
+[[npcs]]
+id = "miner"
+name = "a lost miner"
+room = "muddy_dead_end"
+
+[[npcs]]
+id = "acolyte"
+name = "a drowned acolyte"
+room = "drowned_chapel"
+
+[[npcs]]
+id = "hermit"
+name = "a mushroom hermit"
+room = "fungus_garden"
+
+[[npcs]]
+id = "bat_swarm"
+name = "a swarm of bats"
+room = "forgotten_cache"
+
+[[npcs]]
+id = "warden"
+name = "a hooded warden"
+room = "final_threshold"
