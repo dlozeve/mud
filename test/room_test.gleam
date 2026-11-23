@@ -36,7 +36,7 @@ fn state_with(occupants: List(room.Occupant)) -> room.State {
   )
 }
 
-pub fn say_broadcast_test() {
+pub fn say_broadcast_test() -> Nil {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let state = state_with([alice, bob])
@@ -48,7 +48,7 @@ pub fn say_broadcast_test() {
     ])
 }
 
-pub fn npc_say_broadcast_test() {
+pub fn npc_say_broadcast_test() -> Nil {
   let alice = occupant_with("Alice")
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
@@ -61,7 +61,7 @@ pub fn npc_say_broadcast_test() {
     ]
 }
 
-pub fn enter_broadcast_test() {
+pub fn enter_broadcast_test() -> Nil {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
@@ -87,7 +87,7 @@ pub fn enter_broadcast_test() {
   assert dict.get(new_state.occupants, carol.pid) == Ok(carol)
 }
 
-pub fn npc_enter_is_monitored_and_announced_test() {
+pub fn npc_enter_is_monitored_and_announced_test() -> Nil {
   let alice = occupant_with("Alice")
   let goblin = npc_with("a goblin")
   let state = state_with([alice])
@@ -102,7 +102,7 @@ pub fn npc_enter_is_monitored_and_announced_test() {
   assert dict.get(new_state.occupants, goblin.pid) == Ok(goblin)
 }
 
-pub fn leave_broadcast_test() {
+pub fn leave_broadcast_test() -> Nil {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
@@ -115,7 +115,7 @@ pub fn leave_broadcast_test() {
     ])
 }
 
-pub fn say_non_occupant_test() {
+pub fn say_non_occupant_test() -> Nil {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
@@ -124,7 +124,7 @@ pub fn say_non_occupant_test() {
   assert actions == []
 }
 
-pub fn leave_non_occupant_test() {
+pub fn leave_non_occupant_test() -> Nil {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
@@ -133,7 +133,7 @@ pub fn leave_non_occupant_test() {
   assert actions == []
 }
 
-pub fn enter_twice_test() {
+pub fn enter_twice_test() -> Nil {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let state = state_with([alice, bob])
@@ -148,7 +148,7 @@ fn occupant_with_pid(name: String, pid: process.Pid) -> room.Occupant {
   room.occupant(name, pid, event.Player, fn(_, _) { Nil })
 }
 
-pub fn npc_leave_broadcast_test() {
+pub fn npc_leave_broadcast_test() -> Nil {
   let alice = occupant_with("Alice")
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
@@ -158,7 +158,7 @@ pub fn npc_leave_broadcast_test() {
   assert !dict.has_key(new_state.occupants, goblin.pid)
 }
 
-pub fn down_evicts_a_dead_npc_test() {
+pub fn down_evicts_a_dead_npc_test() -> Nil {
   let goblin_pid = process.spawn(fn() { Nil })
   let goblin =
     room.occupant("a goblin", goblin_pid, event.Npc, fn(_, _) { Nil })
@@ -171,7 +171,7 @@ pub fn down_evicts_a_dead_npc_test() {
   assert !dict.has_key(new_state.occupants, goblin_pid)
 }
 
-pub fn down_evicts_the_occupant_test() {
+pub fn down_evicts_the_occupant_test() -> Nil {
   let alice_pid = process.spawn(fn() { Nil })
   let bob_pid = process.spawn(fn() { Nil })
   let alice = occupant_with_pid("Alice", alice_pid)
@@ -187,7 +187,7 @@ pub fn down_evicts_the_occupant_test() {
   assert !dict.has_key(new_state.occupants, alice.pid)
 }
 
-pub fn down_removes_a_dead_player_so_they_can_reenter_test() {
+pub fn down_removes_a_dead_player_so_they_can_reenter_test() -> Nil {
   let dead_pid = process.spawn(fn() { Nil })
   let alice = occupant_with_pid("Alice", dead_pid)
   let state = state_with([alice])
@@ -201,7 +201,7 @@ pub fn down_removes_a_dead_player_so_they_can_reenter_test() {
   assert dict.size(new_state.occupants) == 1
 }
 
-pub fn down_of_an_unknown_process_is_ignored_test() {
+pub fn down_of_an_unknown_process_is_ignored_test() -> Nil {
   // `session_with` uses the test process itself as the pid, so use a different
   // one for the DOWN that should be ignored.
   let alice = occupant_with_pid("Alice", process.spawn(fn() { Nil }))
@@ -212,7 +212,7 @@ pub fn down_of_an_unknown_process_is_ignored_test() {
   assert new_state == state
 }
 
-pub fn down_of_none_is_ignored_test() {
+pub fn down_of_none_is_ignored_test() -> Nil {
   // `session_with` uses the test process itself as the pid, so use a different
   // one for the DOWN that should be ignored.
   let alice = occupant_with_pid("Alice", process.spawn(fn() { Nil }))
@@ -222,7 +222,7 @@ pub fn down_of_none_is_ignored_test() {
   assert new_state == state
 }
 
-pub fn you_are_in_lists_exits_in_a_fixed_order_test() {
+pub fn you_are_in_lists_exits_in_a_fixed_order_test() -> Nil {
   // Inserted West first, so a plain `dict.keys` would report West, North.
   let def =
     room.Def(
@@ -256,7 +256,7 @@ pub fn you_are_in_lists_exits_in_a_fixed_order_test() {
 
 // ----- Combat -----------------------------------------------------------
 
-pub fn attack_a_missing_npc_tells_the_attacker_test() {
+pub fn attack_a_missing_npc_tells_the_attacker_test() -> Nil {
   let alice = occupant_with("Alice")
   let state = state_with([alice])
   let #(_state, actions, _logs) =
@@ -264,7 +264,7 @@ pub fn attack_a_missing_npc_tells_the_attacker_test() {
   assert actions == [room.Tell(alice.pid, event.AttackFailed("goblin"))]
 }
 
-pub fn attack_hits_the_npc_test() {
+pub fn attack_hits_the_npc_test() -> Nil {
   let alice = occupant_with("Alice")
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
@@ -280,7 +280,7 @@ pub fn attack_hits_the_npc_test() {
     ])
 }
 
-pub fn attack_misses_the_npc_test() {
+pub fn attack_misses_the_npc_test() -> Nil {
   let alice = occupant_with("Alice")
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
@@ -293,7 +293,7 @@ pub fn attack_misses_the_npc_test() {
     ])
 }
 
-pub fn attack_can_omit_the_article_test() {
+pub fn attack_can_omit_the_article_test() -> Nil {
   let alice = occupant_with("Alice")
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
@@ -309,7 +309,7 @@ pub fn attack_can_omit_the_article_test() {
     ])
 }
 
-pub fn attack_does_not_target_players_test() {
+pub fn attack_does_not_target_players_test() -> Nil {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let state = state_with([alice, bob])
@@ -318,7 +318,7 @@ pub fn attack_does_not_target_players_test() {
   assert actions == [room.Tell(alice.pid, event.AttackFailed("Bob"))]
 }
 
-pub fn attack_by_a_non_occupant_is_ignored_test() {
+pub fn attack_by_a_non_occupant_is_ignored_test() -> Nil {
   let alice = occupant_with("Alice")
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
@@ -327,7 +327,7 @@ pub fn attack_by_a_non_occupant_is_ignored_test() {
   assert actions == []
 }
 
-pub fn npc_attack_tells_the_target_player_test() {
+pub fn npc_attack_tells_the_target_player_test() -> Nil {
   let alice = occupant_with("Alice")
   let goblin = npc_with("a goblin")
   let state = state_with([alice, goblin])
@@ -336,7 +336,7 @@ pub fn npc_attack_tells_the_target_player_test() {
   assert actions == [room.Tell(alice.pid, event.NpcHitYou("a goblin", 1))]
 }
 
-pub fn npc_attack_on_a_missing_target_tells_the_npc_test() {
+pub fn npc_attack_on_a_missing_target_tells_the_npc_test() -> Nil {
   let goblin = npc_with("a goblin")
   let state = state_with([goblin])
   let #(_state, actions, _logs) =
@@ -347,7 +347,7 @@ pub fn npc_attack_on_a_missing_target_tells_the_npc_test() {
   assert actions == [room.Tell(goblin.pid, event.NpcTargetGone)]
 }
 
-pub fn death_broadcasts_and_removes_the_occupant_test() {
+pub fn death_broadcasts_and_removes_the_occupant_test() -> Nil {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let state = state_with([alice, bob])
@@ -358,7 +358,7 @@ pub fn death_broadcasts_and_removes_the_occupant_test() {
   assert !dict.has_key(new_state.occupants, alice.pid)
 }
 
-pub fn death_of_a_non_occupant_is_ignored_test() {
+pub fn death_of_a_non_occupant_is_ignored_test() -> Nil {
   let alice = occupant_with("Alice")
   let state = state_with([alice])
   let #(new_state, actions, _logs) =
@@ -367,7 +367,7 @@ pub fn death_of_a_non_occupant_is_ignored_test() {
   assert new_state == state
 }
 
-pub fn who_is_here_test() {
+pub fn who_is_here_test() -> Nil {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let carol = occupant_with("Carol")
@@ -383,7 +383,7 @@ pub fn who_is_here_test() {
 
 // ----- Logging -----------------------------------------------------------
 
-pub fn entering_twice_is_logged_as_a_warning_test() {
+pub fn entering_twice_is_logged_as_a_warning_test() -> Nil {
   let alice = occupant_with("Alice")
   let bob = occupant_with("Bob")
   let state = state_with([alice, bob])
@@ -401,7 +401,7 @@ pub fn entering_twice_is_logged_as_a_warning_test() {
     ]
 }
 
-pub fn a_down_is_logged_before_the_leave_it_causes_test() {
+pub fn a_down_is_logged_before_the_leave_it_causes_test() -> Nil {
   let alice_pid = process.spawn(fn() { Nil })
   let alice = occupant_with_pid("Alice", alice_pid)
   let state = state_with([alice])
@@ -412,4 +412,5 @@ pub fn a_down_is_logged_before_the_leave_it_causes_test() {
     log.Line(message: "occupant process down", ..),
     log.Line(message: "occupant left room", ..),
   ] = logs
+  Nil
 }

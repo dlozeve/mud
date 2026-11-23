@@ -260,7 +260,7 @@ fn expect_no_output(client: Client) -> Nil {
 
 // ----- T1: two clients ------------------------------------------------
 
-pub fn two_clients_move_and_say_test() {
+pub fn two_clients_move_and_say_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
   let bob = start_client(world, 2)
@@ -312,7 +312,7 @@ pub fn two_clients_move_and_say_test() {
 
 // ----- T1b: combat -----------------------------------------------------
 
-pub fn attacking_a_missing_npc_reports_no_target_test() {
+pub fn attacking_a_missing_npc_reports_no_target_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
 
@@ -328,7 +328,7 @@ pub fn attacking_a_missing_npc_reports_no_target_test() {
   stop_world(world)
 }
 
-pub fn lethal_npc_attack_kills_the_player_and_tells_the_room_test() {
+pub fn lethal_npc_attack_kills_the_player_and_tells_the_room_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
   let bob = start_client(world, 2)
@@ -365,7 +365,7 @@ pub fn lethal_npc_attack_kills_the_player_and_tells_the_room_test() {
 
 // ----- T2: restarts ----------------------------------------------------
 
-pub fn room_restart_reenters_test() {
+pub fn room_restart_reenters_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
   let bob = start_client(world, 2)
@@ -422,7 +422,7 @@ pub fn room_restart_reenters_test() {
   stop_world(world)
 }
 
-pub fn world_down_reports_and_session_drops_cleanly_test() {
+pub fn world_down_reports_and_session_drops_cleanly_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
   let bob = start_client(world, 2)
@@ -494,7 +494,7 @@ fn join_with_retry_attempt(
   }
 }
 
-pub fn killed_session_is_evicted_and_name_freed_test() {
+pub fn killed_session_is_evicted_and_name_freed_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
   let bob = start_client(world, 2)
@@ -610,7 +610,7 @@ fn close_reader(reader: Reader) -> Nil {
   Nil
 }
 
-pub fn socket_end_to_end_test() {
+pub fn socket_end_to_end_test() -> Nil {
   let #(world, port) = start_world_with_server()
   let alice = connect(port)
   let bob = connect(port)

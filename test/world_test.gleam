@@ -22,7 +22,7 @@ fn room_with(
   )
 }
 
-fn rooms() {
+fn rooms() -> List(room.Def) {
   let r1 = room.new_id("r1")
   let r2 = room.new_id("r2")
 
@@ -46,7 +46,7 @@ fn state_with(rooms: List(room.Def)) -> world.State {
 
 // ----- Join -------------------------------------------------------------
 
-pub fn join_replies_with_the_room_test() {
+pub fn join_replies_with_the_room_test() -> Nil {
   let r1 = room.new_id("r1")
   let entrance = room_with(r1, "entrance", dict.new())
   let state = state_with([entrance])
@@ -68,7 +68,7 @@ pub fn join_replies_with_the_room_test() {
   assert new_state.players == dict.from_list([#("alice", process.self())])
 }
 
-pub fn join_unknown_room_test() {
+pub fn join_unknown_room_test() -> Nil {
   let r1 = room.new_id("r1")
   let r2 = room.new_id("r2")
   let entrance = room_with(r1, "entrance", dict.new())
@@ -86,7 +86,7 @@ pub fn join_unknown_room_test() {
   assert new_state == state
 }
 
-pub fn join_unknown_room_is_logged_as_an_error_test() {
+pub fn join_unknown_room_is_logged_as_an_error_test() -> Nil {
   let r1 = room.new_id("r1")
   let r2 = room.new_id("r2")
   let entrance = room_with(r1, "entrance", dict.new())
@@ -109,7 +109,7 @@ pub fn join_unknown_room_is_logged_as_an_error_test() {
     ]
 }
 
-pub fn join_while_already_logged_in_test() {
+pub fn join_while_already_logged_in_test() -> Nil {
   let r1 = room.new_id("r1")
   let entrance = room_with(r1, "entrance", dict.new())
   let other_pid = process.spawn(fn() { Nil })
@@ -135,7 +135,7 @@ pub fn join_while_already_logged_in_test() {
   assert new_state.players == dict.from_list([#("alice", other_pid)])
 }
 
-pub fn join_with_a_different_name_test() {
+pub fn join_with_a_different_name_test() -> Nil {
   let r1 = room.new_id("r1")
   let entrance = room_with(r1, "entrance", dict.new())
   let other_pid = process.spawn(fn() { Nil })
@@ -158,7 +158,7 @@ pub fn join_with_a_different_name_test() {
 
 // ----- Eviction ---------------------------------------------------------
 
-pub fn down_frees_the_name_test() {
+pub fn down_frees_the_name_test() -> Nil {
   let r1 = room.new_id("r1")
   let entrance = room_with(r1, "entrance", dict.new())
   let dead_pid = process.spawn(fn() { Nil })
@@ -175,7 +175,7 @@ pub fn down_frees_the_name_test() {
   assert new_state.players == dict.new()
 }
 
-pub fn down_of_an_unknown_process_is_ignored_test() {
+pub fn down_of_an_unknown_process_is_ignored_test() -> Nil {
   let r1 = room.new_id("r1")
   let entrance = room_with(r1, "entrance", dict.new())
   let state =
@@ -190,7 +190,7 @@ pub fn down_of_an_unknown_process_is_ignored_test() {
   assert new_state == state
 }
 
-pub fn down_of_none_is_ignored_test() {
+pub fn down_of_none_is_ignored_test() -> Nil {
   let r1 = room.new_id("r1")
   let entrance = room_with(r1, "entrance", dict.new())
   let state =
@@ -206,7 +206,7 @@ pub fn down_of_none_is_ignored_test() {
 
 // ----- Move -------------------------------------------------------------
 
-pub fn move_replies_with_the_destination_room_test() {
+pub fn move_replies_with_the_destination_room_test() -> Nil {
   let assert [entrance, corridor] = rooms()
   let state = state_with([entrance, corridor])
   let reply_to = process.new_subject()
@@ -226,7 +226,7 @@ pub fn move_replies_with_the_destination_room_test() {
   assert new_state == state
 }
 
-pub fn move_without_an_exit_test() {
+pub fn move_without_an_exit_test() -> Nil {
   let assert [entrance, corridor] = rooms()
   let state = state_with([entrance, corridor])
   let reply_to = process.new_subject()
@@ -251,7 +251,7 @@ pub fn move_without_an_exit_test() {
   assert new_state == state
 }
 
-pub fn move_into_a_missing_room_test() {
+pub fn move_into_a_missing_room_test() -> Nil {
   // The entrance has an exit north, but the corridor is not in the map.
   let assert [entrance, _corridor] = rooms()
   let state = state_with([entrance])
@@ -277,7 +277,7 @@ pub fn move_into_a_missing_room_test() {
   assert new_state == state
 }
 
-pub fn move_from_an_unknown_room_test() {
+pub fn move_from_an_unknown_room_test() -> Nil {
   let assert [_entrance, corridor] = rooms()
   let state = state_with([corridor])
   let reply_to = process.new_subject()
@@ -302,10 +302,11 @@ pub fn move_from_an_unknown_room_test() {
 
 // The world may be restarting, so the send must be dropped rather than
 // panicking on an unregistered name.
-pub fn sending_to_an_unregistered_world_is_dropped_test() {
+pub fn sending_to_an_unregistered_world_is_dropped_test() -> Nil {
   let world_name = process.new_name("no such world")
   let replies = process.new_subject()
 
   world.join(world_name, "Alice", process.self(), room.new_id("r1"), replies)
-  world.move(world_name, room.new_id("r1"), direction.North, replies)
+  let _ = world.move(world_name, room.new_id("r1"), direction.North, replies)
+  Nil
 }

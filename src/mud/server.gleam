@@ -41,7 +41,11 @@ pub fn listener_port(listener: Listener, timeout: Int) -> Int {
   glisten.get_server_info(listener.name, timeout).port
 }
 
-pub fn on_init(world: process.Name(world.Message), entrance: room.Id) {
+pub fn on_init(
+  world: process.Name(world.Message),
+  entrance: room.Id,
+) -> fn(Connection(session.Message)) ->
+  #(session.State, Option(process.Selector(session.Message))) {
   fn(conn: Connection(session.Message)) -> #(
     session.State,
     Option(process.Selector(session.Message)),
@@ -113,7 +117,7 @@ fn loop(
   }
 }
 
-fn on_close(state: session.State) {
+fn on_close(state: session.State) -> Nil {
   let _ =
     session.closed(state)
     |> runner.run_effects(state, sender(None), _)
