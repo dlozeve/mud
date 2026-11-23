@@ -138,31 +138,36 @@ fn state() -> player.State {
 }
 
 pub fn decide_event_renders_to_output_test() {
-  let s = state()
-  assert player.decide(s, event.OccupantSaid("Bob", "hi", event.Player))
-    == #(s, [player.Output("Bob says: hi")])
+  let player_state = state()
+  assert player.decide(
+      player_state,
+      event.OccupantSaid("Bob", "hi", event.Player),
+    )
+    == #(player_state, [player.Output("Bob says: hi")])
 }
 
 pub fn decide_command_say_test() {
-  let s = state()
-  assert player.decide_command(s, command.Say("hi")) == #(s, [player.Say("hi")])
+  let player_state = state()
+  assert player.decide_command(player_state, command.Say("hi"))
+    == #(player_state, [player.Say("hi")])
 }
 
 pub fn decide_command_quit_test() {
-  let s = state()
-  assert player.decide_command(s, command.Quit) == #(s, [])
+  let player_state = state()
+  assert player.decide_command(player_state, command.Quit)
+    == #(player_state, [])
 }
 
 pub fn decide_command_bad_direction_test() {
-  let s = state()
-  assert player.decide_command(s, command.BadDirection("somewhere"))
-    == #(s, [player.Output("Unknown direction: somewhere")])
+  let player_state = state()
+  assert player.decide_command(player_state, command.BadDirection("somewhere"))
+    == #(player_state, [player.Output("Unknown direction: somewhere")])
 }
 
 pub fn decide_command_unknown_test() {
-  let s = state()
-  assert player.decide_command(s, command.Unknown("sing"))
-    == #(s, [player.Output("Unknown command: sing")])
+  let player_state = state()
+  assert player.decide_command(player_state, command.Unknown("sing"))
+    == #(player_state, [player.Output("Unknown command: sing")])
 }
 
 // ----- Combat -----------------------------------------------------------
@@ -197,21 +202,22 @@ pub fn render_npc_hit_you_test() {
 }
 
 pub fn decide_command_attack_test() {
-  let s = state()
-  assert player.decide_command(s, command.Attack("a goblin"))
-    == #(s, [player.Attack("a goblin")])
+  let player_state = state()
+  assert player.decide_command(player_state, command.Attack("a goblin"))
+    == #(player_state, [player.Attack("a goblin")])
 }
 
 pub fn decide_command_missing_target_test() {
-  let s = state()
-  assert player.decide_command(s, command.MissingTarget)
-    == #(s, [player.Output("Attack what?")])
+  let player_state = state()
+  assert player.decide_command(player_state, command.MissingTarget)
+    == #(player_state, [player.Output("Attack what?")])
 }
 
 pub fn decide_damage_reduces_hp_test() {
-  let s = state()
-  let #(s, actions) = player.decide(s, event.NpcHitYou("a goblin", 10))
-  assert s.hp == 90
+  let player_state = state()
+  let #(updated_state, actions) =
+    player.decide(player_state, event.NpcHitYou("a goblin", 10))
+  assert updated_state.hp == 90
   assert actions
     == [
       player.Output("A goblin hits you for 10 damage."),
@@ -220,21 +226,26 @@ pub fn decide_damage_reduces_hp_test() {
 }
 
 pub fn decide_lethal_damage_dies_test() {
-  let s = state()
-  let #(s, actions) = player.decide(s, event.NpcHitYou("a goblin", 100))
-  assert s.hp == 0
+  let player_state = state()
+  let #(updated_state, actions) =
+    player.decide(player_state, event.NpcHitYou("a goblin", 100))
+  assert updated_state.hp == 0
   assert actions == [player.Output("You died"), player.Die]
 }
 
 pub fn decide_damage_never_goes_negative_test() {
-  let s = state()
-  let #(s, _actions) = player.decide(s, event.NpcHitYou("a goblin", 500))
-  assert s.hp == 0
+  let player_state = state()
+  let #(updated_state, _actions) =
+    player.decide(player_state, event.NpcHitYou("a goblin", 500))
+  assert updated_state.hp == 0
 }
 
 pub fn decide_npc_only_combat_events_are_ignored_test() {
-  let s = state()
-  assert player.decide(s, event.NpcTargetGone) == #(s, [])
-  assert player.decide(s, event.NpcAttacked("Alice", process.self(), 2))
-    == #(s, [])
+  let player_state = state()
+  assert player.decide(player_state, event.NpcTargetGone) == #(player_state, [])
+  assert player.decide(
+      player_state,
+      event.NpcAttacked("Alice", process.self(), 2),
+    )
+    == #(player_state, [])
 }

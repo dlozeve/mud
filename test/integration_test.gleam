@@ -214,7 +214,9 @@ fn you_are_in(def: room.Def) -> String {
   player.render(event.YouAreIn(
     room_name: def.name,
     room_description: def.description,
-    exits: list.filter(direction.all(), fn(d) { dict.has_key(def.exits, d) }),
+    exits: list.filter(direction.all(), fn(each_direction) {
+      dict.has_key(def.exits, each_direction)
+    }),
   ))
 }
 

@@ -32,9 +32,13 @@ south = \"entrance\"
   assert npcs == []
 
   assert Ok(entrance)
-    == list.find(rooms, fn(r) { r.id == room.new_id("entrance") })
+    == list.find(rooms, fn(room_definition) {
+      room_definition.id == room.new_id("entrance")
+    })
   let assert Ok(corridor) =
-    list.find(rooms, fn(r) { r.id == room.new_id("corridor") })
+    list.find(rooms, fn(room_definition) {
+      room_definition.id == room.new_id("corridor")
+    })
 
   assert entrance.name == "the dungeon entrance"
   assert entrance.description
@@ -83,17 +87,23 @@ room = \"entrance\"
   let assert Ok(map_loader.Map(rooms:, npcs:, ..)) =
     map_loader.parse_rooms(input)
   let assert Ok(corridor) =
-    list.find(rooms, fn(r) { r.id == room.new_id("corridor") })
+    list.find(rooms, fn(room_definition) {
+      room_definition.id == room.new_id("corridor")
+    })
   let assert Ok(entrance) =
-    list.find(rooms, fn(r) { r.id == room.new_id("entrance") })
+    list.find(rooms, fn(room_definition) {
+      room_definition.id == room.new_id("entrance")
+    })
 
-  let assert Ok(goblin) = list.find(npcs, fn(n) { n.id == "goblin" })
+  let assert Ok(goblin) =
+    list.find(npcs, fn(npc_definition) { npc_definition.id == "goblin" })
   assert goblin.name == "a goblin"
   assert goblin.hp == 3
   // The room string is resolved to the loaded room definition.
   assert goblin.room == corridor
 
-  let assert Ok(bat) = list.find(npcs, fn(n) { n.id == "bat" })
+  let assert Ok(bat) =
+    list.find(npcs, fn(npc_definition) { npc_definition.id == "bat" })
   assert bat.name == "a bat"
   // An omitted hp falls back to the combat default.
   assert bat.hp == combat.npc_default_hp

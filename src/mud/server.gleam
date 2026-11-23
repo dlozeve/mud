@@ -77,10 +77,10 @@ pub fn on_init(world: process.Name(world.Message), entrance: room.Id) {
 
 fn loop(
   state: session.State,
-  msg: glisten.Message(session.Message),
+  message: glisten.Message(session.Message),
   conn: Connection(session.Message),
 ) -> glisten.Next(session.State, glisten.Message(session.Message)) {
-  let #(state, effects) = case msg {
+  let #(state, effects) = case message {
     glisten.Packet(chunk) -> session.receive_bytes(state, chunk)
     glisten.User(user_message) -> session.receive_message(state, user_message)
   }

@@ -416,8 +416,8 @@ fn you_are_in(state: State) -> event.RoomEvent {
   event.YouAreIn(
     room_name: state.def.name,
     room_description: state.def.description,
-    exits: list.filter(direction.all(), fn(d) {
-      dict.has_key(state.def.exits, d)
+    exits: list.filter(direction.all(), fn(each_direction) {
+      dict.has_key(state.def.exits, each_direction)
     }),
   )
 }

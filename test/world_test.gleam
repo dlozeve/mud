@@ -35,7 +35,11 @@ fn rooms() {
 
 fn state_with(rooms: List(room.Def)) -> world.State {
   world.State(
-    rooms: dict.from_list(list.map(rooms, fn(r) { #(r.id, r) })),
+    rooms: dict.from_list(
+      list.map(rooms, fn(room_definition) {
+        #(room_definition.id, room_definition)
+      }),
+    ),
     players: dict.new(),
   )
 }
@@ -210,7 +214,11 @@ pub fn move_replies_with_the_destination_room_test() {
   let #(new_state, actions, _logs) =
     world.decide(
       state,
-      world.Move(from: entrance.id, dir: direction.North, reply_to: reply_to),
+      world.Move(
+        from: entrance.id,
+        direction: direction.North,
+        reply_to: reply_to,
+      ),
     )
 
   assert actions
@@ -226,7 +234,11 @@ pub fn move_without_an_exit_test() {
   let #(new_state, actions, _logs) =
     world.decide(
       state,
-      world.Move(from: entrance.id, dir: direction.West, reply_to: reply_to),
+      world.Move(
+        from: entrance.id,
+        direction: direction.West,
+        reply_to: reply_to,
+      ),
     )
 
   assert actions
@@ -248,7 +260,11 @@ pub fn move_into_a_missing_room_test() {
   let #(new_state, actions, _logs) =
     world.decide(
       state,
-      world.Move(from: entrance.id, dir: direction.North, reply_to: reply_to),
+      world.Move(
+        from: entrance.id,
+        direction: direction.North,
+        reply_to: reply_to,
+      ),
     )
 
   assert actions
@@ -271,7 +287,7 @@ pub fn move_from_an_unknown_room_test() {
       state,
       world.Move(
         from: room.new_id("unknown"),
-        dir: direction.North,
+        direction: direction.North,
         reply_to: reply_to,
       ),
     )

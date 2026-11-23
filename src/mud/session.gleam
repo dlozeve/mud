@@ -138,9 +138,9 @@ fn handle_line(state: State, line: String) -> #(State, List(Effect)) {
 }
 
 fn valid_name(line: String) -> Result(String, Nil) {
-  let assert Ok(re) =
+  let assert Ok(name_pattern) =
     regexp.from_string("^[a-zA-Z][a-zA-Z0-9_-]{0,30}[a-zA-Z0-9]$")
-  case regexp.check(line, with: re) {
+  case regexp.check(line, with: name_pattern) {
     True ->
       case command.parse(line) {
         command.Unknown(_) -> Ok(line)
@@ -164,12 +164,12 @@ pub fn join_failed(
   state: State,
   error: world.JoinError,
 ) -> #(State, List(Effect)) {
-  let msg = case error {
+  let message = case error {
     world.NoSuchRoom -> "This room does not exist."
     world.AlreadyLoggedIn ->
       "This name is already in use. Choose another name: "
   }
-  #(State(..state, status: AwaitingName), [Do(player.Output(msg))])
+  #(State(..state, status: AwaitingName), [Do(player.Output(message))])
 }
 
 // for messages received from other processes

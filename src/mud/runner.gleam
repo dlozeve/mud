@@ -151,13 +151,13 @@ fn run_effect(
         room.say(player.room.process_name, player.pid, line)
         Ok(state)
       })
-    player.Move(dir) ->
+    player.Move(direction) ->
       with_player(state, action, fn(player) {
         logger
         |> woof.log(woof.Info, "moved", [
-          woof.str("direction", direction.render(dir)),
+          woof.str("direction", direction.render(direction)),
         ])
-        case world.move(state.world, player.room.id, dir, state.replies) {
+        case world.move(state.world, player.room.id, direction, state.replies) {
           Ok(_) -> Ok(state)
           Error(_) -> write(state, send, "The world is restarting, try again.")
         }

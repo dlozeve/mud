@@ -17,8 +17,8 @@ pub type Command {
 }
 
 pub fn parse(line: String) -> Command {
-  let assert Ok(re) = regexp.from_string("\\s+")
-  let words = line |> string.trim() |> regexp.split(with: re)
+  let assert Ok(split_pattern) = regexp.from_string("\\s+")
+  let words = line |> string.trim() |> regexp.split(with: split_pattern)
   case words {
     [] -> Unknown("")
     [verb, ..rest] ->
@@ -26,10 +26,10 @@ pub fn parse(line: String) -> Command {
         "help", _ | "?", _ -> Help
         "say", rest -> Say(string.join(rest, " "))
         "go", [] -> MissingDirection
-        "go", [dir, ..] ->
-          case parse_direction(dir) {
-            Ok(dir) -> Go(dir)
-            Error(s) -> BadDirection(s)
+        "go", [direction_text, ..] ->
+          case parse_direction(direction_text) {
+            Ok(parsed_direction) -> Go(parsed_direction)
+            Error(text) -> BadDirection(text)
           }
         "look", _ -> Look
         "who", _ -> WhoIsHere
@@ -41,14 +41,14 @@ pub fn parse(line: String) -> Command {
   }
 }
 
-fn parse_direction(s: String) -> Result(Direction, String) {
-  case string.lowercase(s) {
+fn parse_direction(input: String) -> Result(Direction, String) {
+  case string.lowercase(input) {
     "n" | "north" -> Ok(direction.North)
     "e" | "east" -> Ok(direction.East)
     "s" | "south" -> Ok(direction.South)
     "w" | "west" -> Ok(direction.West)
     "u" | "up" -> Ok(direction.Up)
     "d" | "down" -> Ok(direction.Down)
-    _ -> Error(s)
+    _ -> Error(input)
   }
 }

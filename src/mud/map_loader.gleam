@@ -26,11 +26,16 @@ pub fn parse_rooms(input: String) -> Result(Map, ParseError) {
   use parsed <- result.try(
     tom.parse_to_dynamic(input) |> result.map_error(TomlError),
   )
-  use map_src <- result.try(
-    decode.run(parsed, map_src_decoder()) |> result.map_error(DecoderError),
+  use map_source <- result.try(
+    decode.run(parsed, map_source_decoder()) |> result.map_error(DecoderError),
   )
-  let rooms = list.map(map_src.rooms, room_def)
-  let rooms_dict = dict.from_list(list.map(rooms, fn(r) { #(r.id, r) }))
+  let rooms = list.map(map_source.rooms, room_def)
+  let rooms_dict =
+    dict.from_list(
+      list.map(rooms, fn(room_definition) {
+        #(room_definition.id, room_definition)
+      }),
+    )
   let rooms =
     list.fold(rooms, Ok([]), fn(acc, room) {
       case acc, validate_exits(rooms_dict, room) {
@@ -43,24 +48,29 @@ pub fn parse_rooms(input: String) -> Result(Map, ParseError) {
       }
     })
   let npcs =
-    list.try_map(map_src.npcs, fn(npc_src) {
-      case dict.get(rooms_dict, room.new_id(npc_src.room)) {
+    list.try_map(map_source.npcs, fn(npc_source) {
+      case dict.get(rooms_dict, room.new_id(npc_source.room)) {
         Ok(room) ->
-          Ok(npc.Def(id: npc_src.id, name: npc_src.name, room:, hp: npc_src.hp))
+          Ok(npc.Def(
+            id: npc_source.id,
+            name: npc_source.name,
+            room:,
+            hp: npc_source.hp,
+          ))
         Error(_) ->
-          Error(InvalidNpcRoom(npc_id: npc_src.id, room: npc_src.room))
+          Error(InvalidNpcRoom(npc_id: npc_source.id, room: npc_source.room))
       }
     })
-  case rooms, npcs, dict.get(rooms_dict, room.new_id(map_src.entrance)) {
+  case rooms, npcs, dict.get(rooms_dict, room.new_id(map_source.entrance)) {
     Ok(rooms), Ok(npcs), Ok(entrance) -> Ok(Map(rooms:, entrance:, npcs:))
     Error(e), _, _ -> Error(e)
     _, Error(e), _ -> Error(e)
-    _, _, Error(_) -> Error(InvalidEntrance(map_src.entrance))
+    _, _, Error(_) -> Error(InvalidEntrance(map_source.entrance))
   }
 }
 
-type RoomSrc {
-  RoomSrc(
+type RoomSource {
+  RoomSource(
     id: String,
     name: String,
     description: String,
@@ -68,12 +78,12 @@ type RoomSrc {
   )
 }
 
-type NpcSrc {
-  NpcSrc(id: String, name: String, room: String, hp: Int)
+type NpcSource {
+  NpcSource(id: String, name: String, room: String, hp: Int)
 }
 
-type MapSrc {
-  MapSrc(entrance: String, rooms: List(RoomSrc), npcs: List(NpcSrc))
+type MapSource {
+  MapSource(entrance: String, rooms: List(RoomSource), npcs: List(NpcSource))
 }
 
 fn direction_decoder() -> decode.Decoder(Direction) {
@@ -89,7 +99,7 @@ fn direction_decoder() -> decode.Decoder(Direction) {
   }
 }
 
-fn room_src_decoder() -> decode.Decoder(RoomSrc) {
+fn room_source_decoder() -> decode.Decoder(RoomSource) {
   use id <- decode.field("id", decode.string)
   use name <- decode.field("name", decode.string)
   use description <- decode.field("description", decode.string)
@@ -97,25 +107,29 @@ fn room_src_decoder() -> decode.Decoder(RoomSrc) {
     "exits",
     decode.dict(direction_decoder(), decode.string),
   )
-  decode.success(RoomSrc(id:, name:, description:, exits:))
+  decode.success(RoomSource(id:, name:, description:, exits:))
 }
 
-fn npc_src_decoder() -> decode.Decoder(NpcSrc) {
+fn npc_source_decoder() -> decode.Decoder(NpcSource) {
   use id <- decode.field("id", decode.string)
   use name <- decode.field("name", decode.string)
   use room <- decode.field("room", decode.string)
   use hp <- decode.optional_field("hp", combat.npc_default_hp, decode.int)
-  decode.success(NpcSrc(id:, name:, room:, hp:))
+  decode.success(NpcSource(id:, name:, room:, hp:))
 }
 
-fn map_src_decoder() -> decode.Decoder(MapSrc) {
+fn map_source_decoder() -> decode.Decoder(MapSource) {
   use entrance <- decode.field("entrance", decode.string)
-  use rooms <- decode.field("rooms", decode.list(room_src_decoder()))
-  use npcs <- decode.optional_field("npcs", [], decode.list(npc_src_decoder()))
-  decode.success(MapSrc(entrance:, rooms:, npcs:))
+  use rooms <- decode.field("rooms", decode.list(room_source_decoder()))
+  use npcs <- decode.optional_field(
+    "npcs",
+    [],
+    decode.list(npc_source_decoder()),
+  )
+  decode.success(MapSource(entrance:, rooms:, npcs:))
 }
 
-fn room_def(room: RoomSrc) -> room.Def {
+fn room_def(room: RoomSource) -> room.Def {
   room.Def(
     process_name: process.new_name(room.id),
     id: room.new_id(room.id),
@@ -125,8 +139,8 @@ fn room_def(room: RoomSrc) -> room.Def {
   )
 }
 
-fn reverse_direction(dir: Direction) -> Direction {
-  case dir {
+fn reverse_direction(direction: Direction) -> Direction {
+  case direction {
     direction.North -> direction.South
     direction.East -> direction.West
     direction.South -> direction.North
@@ -141,14 +155,14 @@ fn validate_exits(
   room: room.Def,
 ) -> Result(room.Def, ParseError) {
   let dir_results =
-    dict.map_values(room.exits, fn(dir, id) {
+    dict.map_values(room.exits, fn(exit_direction, id) {
       case dict.get(rooms_dict, id) {
         Ok(target_room) ->
-          case dict.get(target_room.exits, reverse_direction(dir)) {
+          case dict.get(target_room.exits, reverse_direction(exit_direction)) {
             Ok(rid) if rid == room.id -> Ok(room)
-            _ -> Error(#(room.id, dir))
+            _ -> Error(#(room.id, exit_direction))
           }
-        Error(_) -> Error(#(room.id, dir))
+        Error(_) -> Error(#(room.id, exit_direction))
       }
     })
   case

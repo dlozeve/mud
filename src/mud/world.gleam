@@ -22,7 +22,7 @@ pub type State {
 
 pub type Message {
   Join(name: String, pid: process.Pid, at: room.Id, reply_to: Subject(Reply))
-  Move(from: room.Id, dir: Direction, reply_to: Subject(Reply))
+  Move(from: room.Id, direction: Direction, reply_to: Subject(Reply))
   Down(pid: Option(process.Pid))
 }
 
@@ -97,13 +97,13 @@ pub fn decide(
         }
       }
     }
-    Move(from, dir, reply_to) ->
-      case resolve_direction(state.rooms, from, dir) {
+    Move(from, direction, reply_to) ->
+      case resolve_direction(state.rooms, from, direction) {
         Ok(to_room) -> {
           let logs = [
             log.Line(woof.Debug, "player moving", [
               woof.str("from_room", room.id_to_string(from)),
-              woof.str("direction", direction.render(dir)),
+              woof.str("direction", direction.render(direction)),
               woof.str("to_room", room.id_to_string(to_room.id)),
             ]),
           ]
@@ -117,7 +117,7 @@ pub fn decide(
           let logs = [
             log.Line(woof.Warning, "player could not move", [
               woof.str("from_room", room.id_to_string(from)),
-              woof.str("direction", direction.render(dir)),
+              woof.str("direction", direction.render(direction)),
               woof.str("error", string.inspect(error)),
             ]),
           ]
@@ -142,11 +142,11 @@ pub fn decide(
 fn resolve_direction(
   rooms: Dict(room.Id, room.Def),
   at: room.Id,
-  dir: Direction,
+  direction: Direction,
 ) -> Result(room.Def, MoveError) {
   case dict.get(rooms, at) {
     Ok(from_room) ->
-      case dict.get(from_room.exits, dir) {
+      case dict.get(from_room.exits, direction) {
         Ok(to) ->
           case dict.get(rooms, to) {
             Ok(to_room) -> Ok(to_room)
@@ -205,12 +205,15 @@ pub fn join(
 pub fn move(
   world: process.Name(Message),
   from: room.Id,
-  dir: Direction,
+  direction: Direction,
   reply_to: Subject(Reply),
 ) -> Result(Nil, Nil) {
   case process.named(world) {
     Ok(_pid) ->
-      actor.send(process.named_subject(world), Move(from:, dir:, reply_to:))
+      actor.send(
+        process.named_subject(world),
+        Move(from:, direction:, reply_to:),
+      )
       |> Ok
     Error(_) -> Error(Nil)
   }

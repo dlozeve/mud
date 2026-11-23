@@ -41,12 +41,14 @@ pub fn decide_command(
   case command {
     command.Help -> #(state, [Output(help())])
     command.Say(line) -> #(state, [Say(line)])
-    command.Go(dir) -> #(state, [Move(dir)])
+    command.Go(direction) -> #(state, [Move(direction)])
     command.Look -> #(state, [Look])
     command.WhoIsHere -> #(state, [WhoIsHere])
     command.Attack(name) -> #(state, [Attack(name)])
     command.Quit -> #(state, [])
-    command.BadDirection(dir) -> #(state, [Output("Unknown direction: " <> dir)])
+    command.BadDirection(text) -> #(state, [
+      Output("Unknown direction: " <> text),
+    ])
     command.MissingDirection -> #(state, [Output("Go where?")])
     command.MissingTarget -> #(state, [Output("Attack what?")])
     command.Unknown(line) -> #(state, [Output("Unknown command: " <> line)])
@@ -138,8 +140,8 @@ pub fn render(room_event: event.RoomEvent) -> String {
 fn describe_exits(exits: List(Direction)) -> String {
   // Up and Down are not doorways, they are staircases.
   let #(staircases, doorways) =
-    list.partition(exits, fn(dir) {
-      case dir {
+    list.partition(exits, fn(exit_direction) {
+      case exit_direction {
         direction.Up | direction.Down -> True
         direction.North | direction.East | direction.South | direction.West ->
           False
@@ -159,10 +161,10 @@ fn describe_doorways(exits: List(Direction)) -> String {
     [a] -> "There is a single door, " <> a <> "."
     [a, b] -> "There are two doors: " <> a <> " and " <> b <> "."
     words -> {
-      let n = list.length(words)
-      let #(front, tail) = list.split(words, n - 1)
+      let count = list.length(words)
+      let #(front, tail) = list.split(words, count - 1)
       "There are "
-      <> int.to_string(n)
+      <> int.to_string(count)
       <> " doors: "
       <> string.join(front, ", ")
       <> " and "
@@ -178,10 +180,10 @@ fn describe_staircases(exits: List(Direction)) -> String {
     [a] -> "There is a staircase leading " <> a <> "."
     [a, b] -> "There are staircases leading " <> a <> " and " <> b <> "."
     words -> {
-      let n = list.length(words)
-      let #(front, tail) = list.split(words, n - 1)
+      let count = list.length(words)
+      let #(front, tail) = list.split(words, count - 1)
       "There are "
-      <> int.to_string(n)
+      <> int.to_string(count)
       <> " staircases leading "
       <> string.join(front, ", ")
       <> " and "
@@ -199,8 +201,8 @@ fn describe_occupants(
     [] -> ""
     [name] -> name <> " is here."
     names -> {
-      let n = list.length(names)
-      let #(front, tail) = list.split(names, n - 1)
+      let count = list.length(names)
+      let #(front, tail) = list.split(names, count - 1)
       string.join(front, ", ") <> " and " <> string.concat(tail) <> " are here."
     }
   }
@@ -208,8 +210,8 @@ fn describe_occupants(
     [] -> ""
     [name] -> "There is " <> name <> " in the room."
     names -> {
-      let n = list.length(names)
-      let #(front, tail) = list.split(names, n - 1)
+      let count = list.length(names)
+      let #(front, tail) = list.split(names, count - 1)
       "There are "
       <> string.join(front, ", ")
       <> " and "

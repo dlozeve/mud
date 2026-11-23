@@ -98,7 +98,12 @@ pub fn world_child(
   name: process.Name(world.Message),
   rooms: List(room.Def),
 ) -> supervision.ChildSpecification(Subject(world.Message)) {
-  let rooms = dict.from_list(list.map(rooms, fn(r) { #(r.id, r) }))
+  let rooms =
+    dict.from_list(
+      list.map(rooms, fn(room_definition) {
+        #(room_definition.id, room_definition)
+      }),
+    )
   let state = world.State(rooms:, players: dict.new())
   supervision.worker(fn() {
     actor.new_with_initialiser(1000, fn(subject) {
