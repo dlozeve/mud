@@ -138,10 +138,10 @@ sequenceDiagram
   W->>W: players["alice"] = pid
   W-->>S: replies: Joined(Ok(entrance))
   W->>S: monitor player pid
-  S->>S: InGame(Alice), effect EnterRoom(entrance, 0)
+  S->>S: InGame(Alice, room_watch: None), effect EnterRoom(entrance, 0)
   S->>R: process.named(entrance) -> room pid
   S->>R: room.enter(entrance, occupant(Alice, pid, Player))
-  S->>R: monitor room pid (room_watch)
+  S->>R: monitor room pid, InGame(..., room_watch: Some(...))
   R->>R: occupants[pid] = Alice, monitor player pid
   R-->>S: listener: RoomMessage(entrance, YouAreIn(...))
   R-->>N: listener: RoomMessage(entrance, OccupantArrived("Alice", Player))
@@ -237,16 +237,16 @@ sequenceDiagram
   S->>W: world.move(entrance, North, replies)
   W->>W: resolve entrance.north -> corridor
   W-->>S: replies: Moved(entrance, Ok(corridor))
-  S->>S: InGame(player.room = corridor)
+  S->>S: InGame(player.room = corridor, room_watch: ...)
   S->>R1: room.leave(entrance, pid)
   R1-->>O: RoomMessage(OccupantLeft("Alice", Player))
   S->>R2: process.named(corridor), room.enter(corridor, occupant)
-  S->>R2: monitor corridor pid (replace room_watch)
+  S->>R2: monitor corridor pid (replace room_watch in InGame)
   R2-->>S: RoomMessage(YouAreIn(corridor, ...))
   R2-->>O: RoomMessage(OccupantArrived("Alice", Player))
   S-->>C: corridor name, description, and exits
   alt invalid exit
-    W-->>S: replies: Moved(entrance, Error(NonExistingExit))
+    W-->>S: replies: Moved(entrance, Error(NonExistingExit(...)))
     S-->>C: "You can't go that way."
   end
 ```
@@ -279,18 +279,18 @@ sequenceDiagram
   C->>S: "attack goblin" + newline
   S->>S: command.parse -> Attack("goblin")
   S->>Run: Do(player.Attack("goblin"))
-  Run->>Run: combat.player_hits(combat.roll()) -> True
-  Run->>R: room.attack(room, alice_pid, "goblin", hit: True)
+  Run->>Run: combat.player_hits(combat.roll()) -> Hit
+  Run->>R: room.attack(room, alice_pid, "goblin", outcome: Hit)
   R->>R: find NPC by name
   R-->>S: YouHitNpc("a goblin", 2)
   R-->>N: NpcAttacked("Alice", alice_pid, 2)
   N->>N: status = Attacking(hp - 2, Alice)
 
   Note over N: on the next tick
-  N->>N: combat.npc_hits(roll) -> True
+  N->>N: combat.npc_hits(roll) -> Hit
   N->>R: room.npc_attack(room, goblin_pid, alice_pid, "a goblin", 1)
   R-->>S: NpcHitYou("a goblin", 1)
-  S->>S: hp = hp - 1, render damage and remaining hp
+  S->>S: Alive(hp) = Alive(hp - 1), render damage and remaining hp
 ```
 
 ### Dying
@@ -312,7 +312,7 @@ sequenceDiagram
 
   N->>R: room.npc_attack(..., alice_pid, damage)
   R-->>S: NpcHitYou("a goblin", damage)
-  S->>S: hp reaches 0 -> Output("You died")
+  S->>S: Alive(hp) reaches 0 -> Dead, Output("You died")
   S->>R: room.died(room, alice_pid)
   R-->>B: OccupantDied("Alice", Player)
   S->>S: Stop -> connection closes
@@ -366,7 +366,7 @@ sequenceDiagram
   RS->>R: start replacement room under the same registered name
   Note over S: monitor on the old room pid fires DOWN
   Note over N: monitor on the old room pid fires DOWN
-  S->>S: RoomDown matches room_watch -> EnterRoom(current, 0)
+  S->>S: RoomDown matches InGame's room_watch -> EnterRoom(current, 0)
   alt room name not registered yet
     S->>S: RetryEnter after 100 ms, at most 10 attempts
   else room is up
