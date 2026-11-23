@@ -4,6 +4,7 @@ import gleam/erlang/process
 import gleam/list
 import gleam/result
 import gleam/string
+import mud/combat
 import mud/direction.{type Direction}
 import mud/npc
 import mud/room
@@ -44,7 +45,8 @@ pub fn parse_rooms(input: String) -> Result(Map, ParseError) {
   let npcs =
     list.try_map(map_src.npcs, fn(npc_src) {
       case dict.get(rooms_dict, room.new_id(npc_src.room)) {
-        Ok(room) -> Ok(npc.Def(id: npc_src.id, name: npc_src.name, room:))
+        Ok(room) ->
+          Ok(npc.Def(id: npc_src.id, name: npc_src.name, room:, hp: npc_src.hp))
         Error(_) ->
           Error(InvalidNpcRoom(npc_id: npc_src.id, room: npc_src.room))
       }
@@ -67,7 +69,7 @@ type RoomSrc {
 }
 
 type NpcSrc {
-  NpcSrc(id: String, name: String, room: String)
+  NpcSrc(id: String, name: String, room: String, hp: Int)
 }
 
 type MapSrc {
@@ -102,7 +104,8 @@ fn npc_src_decoder() -> decode.Decoder(NpcSrc) {
   use id <- decode.field("id", decode.string)
   use name <- decode.field("name", decode.string)
   use room <- decode.field("room", decode.string)
-  decode.success(NpcSrc(id:, name:, room:))
+  use hp <- decode.optional_field("hp", combat.npc_default_hp, decode.int)
+  decode.success(NpcSrc(id:, name:, room:, hp:))
 }
 
 fn map_src_decoder() -> decode.Decoder(MapSrc) {

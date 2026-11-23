@@ -391,60 +391,73 @@ description = "A blank stone door stands at the end of the room, its handle worn
 west = "warm_vent"
 
 # ---------------------------------------------------------------------------
-# NPCs: roughly one room in four, never more than one per room
+# NPCs: roughly one room in four, never more than one per room.
+# hp is optional (default 5) and scales from small creatures to the
+# tougher enemies found on the lower levels.
 # ---------------------------------------------------------------------------
 
 [[npcs]]
 id = "ghoul"
 name = "a pale ghoul"
 room = "bone_chandelier"
+hp = 3
 
 [[npcs]]
 id = "leech"
 name = "a giant leech"
 room = "flooded_cell"
+hp = 2
 
 [[npcs]]
 id = "sentinel"
 name = "a rusted sentinel"
 room = "silent_vault"
+hp = 5
 
 [[npcs]]
 id = "oracle"
 name = "a blind oracle"
 room = "damp_alcove"
+hp = 3
 
 [[npcs]]
 id = "gargoyle"
 name = "a stone gargoyle"
 room = "broken_statue"
+hp = 7
 
 [[npcs]]
 id = "gnoll"
 name = "a scrawny gnoll"
 room = "rusted_gate"
+hp = 4
 
 [[npcs]]
 id = "miner"
 name = "a lost miner"
 room = "muddy_dead_end"
+hp = 3
 
 [[npcs]]
 id = "acolyte"
 name = "a drowned acolyte"
 room = "drowned_chapel"
+hp = 8
 
 [[npcs]]
 id = "hermit"
 name = "a mushroom hermit"
 room = "fungus_garden"
+hp = 5
 
 [[npcs]]
 id = "bat_swarm"
 name = "a swarm of bats"
 room = "forgotten_cache"
+hp = 2
 
 [[npcs]]
 id = "warden"
 name = "a hooded warden"
 room = "final_threshold"
+hp = 10

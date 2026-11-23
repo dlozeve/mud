@@ -1,5 +1,6 @@
 import gleam/dict
 import gleam/list
+import mud/combat
 import mud/direction
 import mud/map_loader
 import mud/room
@@ -70,6 +71,7 @@ up = \"entrance\"
 id = \"goblin\"
 name = \"a goblin\"
 room = \"corridor\"
+hp = 3
 
 
 [[npcs]]
@@ -87,11 +89,14 @@ room = \"entrance\"
 
   let assert Ok(goblin) = list.find(npcs, fn(n) { n.id == "goblin" })
   assert goblin.name == "a goblin"
+  assert goblin.hp == 3
   // The room string is resolved to the loaded room definition.
   assert goblin.room == corridor
 
   let assert Ok(bat) = list.find(npcs, fn(n) { n.id == "bat" })
   assert bat.name == "a bat"
+  // An omitted hp falls back to the combat default.
+  assert bat.hp == combat.npc_default_hp
   assert bat.room == entrance
 }
 

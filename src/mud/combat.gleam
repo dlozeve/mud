@@ -8,7 +8,8 @@ import gleam/int
 /// Players are deliberately much tougher than NPCs: a fight should be easy.
 pub const player_max_hp = 100
 
-pub const npc_max_hp = 5
+/// The starting hp of an NPC whose map entry omits `hp`.
+pub const npc_default_hp = 5
 
 /// A player almost always lands a hit.
 pub const player_hit_chance = 85

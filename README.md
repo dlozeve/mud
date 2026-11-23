@@ -67,6 +67,7 @@ up = "entrance"
 id = "goblin"                  # names the process, tags its logs
 name = "a goblin"              # what players see and `attack` matches
 room = "corridor"              # id of the room it starts in
+hp = 3                         # optional starting hp, defaults to 5
 ```
 
 ## Sequence diagrams

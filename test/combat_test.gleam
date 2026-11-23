@@ -23,7 +23,7 @@ pub fn npcs_hit_less_often_than_players_test() {
 }
 
 pub fn npcs_are_much_weaker_than_players_test() {
-  assert combat.npc_max_hp * 10 < combat.player_max_hp
+  assert combat.npc_default_hp * 10 < combat.player_max_hp
 }
 
 pub fn npc_damage_is_lower_than_player_damage_test() {

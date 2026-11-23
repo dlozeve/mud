@@ -14,10 +14,11 @@ const max_join_attempts = 10
 
 const join_retry_ms = 1000
 
-// What the map file says about an NPC: the room it starts in and how it
-// presents itself. The id names the actor's process and tags its log lines.
+// What the map file says about an NPC: the room it starts in, how it
+// presents itself, and its starting hp. The id names the actor's process and
+// tags its log lines.
 pub type Def {
-  Def(id: String, name: String, room: room.Def)
+  Def(id: String, name: String, room: room.Def, hp: Int)
 }
 
 pub type State {

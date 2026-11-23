@@ -44,6 +44,7 @@ pub fn npc_child(
   id: String,
   name: String,
   room: room.Def,
+  hp: Int,
 ) -> supervision.ChildSpecification(Subject(npc.Message)) {
   supervision.worker(fn() {
     let result =
@@ -66,7 +67,7 @@ pub fn npc_child(
             pid: process.self(),
             subject:,
             room:,
-            status: npc.Alive(combat.npc_max_hp),
+            status: npc.Alive(hp),
             tick_ms: 1000,
           )
         actor.initialised(state)
@@ -139,6 +140,9 @@ pub fn add_npc_children(
   npcs: List(npc.Def),
 ) -> static_supervisor.Builder {
   list.fold(npcs, supervisor, fn(builder, def) {
-    static_supervisor.add(builder, npc_child(def.id, def.name, def.room))
+    static_supervisor.add(
+      builder,
+      npc_child(def.id, def.name, def.room, def.hp),
+    )
   })
 }
