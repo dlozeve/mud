@@ -1,0 +1,32 @@
+name: Build container image
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build . --file Containerfile --tag mud
+
+      - name: Log in to registry
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "$GITHUB_TOKEN" | docker login ghcr.io \
+            -u "$ACTOR" --password-stdin
+
+      - name: Push image
+        run: |
+          IMAGE_ID=ghcr.io/dlozeve/mud
+          TAG="$IMAGE_ID":${GITHUB_REF_NAME}
+          docker tag mud "$TAG"
+          docker push "$TAG"
