@@ -61,6 +61,7 @@ pub fn npc_child(
           })
         let state =
           npc.State(
+            id:,
             name:,
             pid: process.self(),
             subject:,
@@ -131,4 +132,13 @@ pub fn rooms_supervisor(rooms: List(room.Def)) -> static_supervisor.Builder {
     fn(builder, def) { static_supervisor.add(builder, room_child(def)) },
   )
   |> static_supervisor.restart_tolerance(intensity: 5, period: 10)
+}
+
+pub fn add_npc_children(
+  supervisor: static_supervisor.Builder,
+  npcs: List(npc.Def),
+) -> static_supervisor.Builder {
+  list.fold(npcs, supervisor, fn(builder, def) {
+    static_supervisor.add(builder, npc_child(def.id, def.name, def.room))
+  })
 }

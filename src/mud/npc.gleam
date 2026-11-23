@@ -14,8 +14,15 @@ const max_join_attempts = 10
 
 const join_retry_ms = 1000
 
+// What the map file says about an NPC: the room it starts in and how it
+// presents itself. The id names the actor's process and tags its log lines.
+pub type Def {
+  Def(id: String, name: String, room: room.Def)
+}
+
 pub type State {
   State(
+    id: String,
     name: String,
     pid: process.Pid,
     subject: Subject(Message),
@@ -218,7 +225,7 @@ pub fn handle_message(
   state: State,
   message: Message,
 ) -> actor.Next(State, Message) {
-  let logger = log.npc_logger(state.name, state.pid)
+  let logger = log.npc_logger(state.id, state.name, state.pid)
   let #(state, actions, logs) = decide(state, message)
   list.each(logs, log.emit(logger, _))
   list.each(actions, run(_, state))

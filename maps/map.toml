@@ -14,3 +14,8 @@ name = "a dimly-lit corridor"
 description = "Long and narrow, with a few torches on the walls. Damp."
 [rooms.exits]
 up = "entrance"
+
+[[npcs]]
+id = "goblin"
+name = "a goblin"
+room = "corridor"

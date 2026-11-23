@@ -20,6 +20,7 @@ fn room_def() -> room.Def {
 
 fn npc_state(status: npc.NpcStatus) -> npc.State {
   npc.State(
+    id: "goblin",
     name: "a goblin",
     pid: process.self(),
     subject: process.new_subject(),

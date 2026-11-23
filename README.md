@@ -47,8 +47,9 @@ current room, the socket, or a timer.
 ### Startup
 
 `main` loads the map, builds the supervision tree, and starts the
-listener.  Rooms start first, then the world, then the NPCs (each
-joining their room), and finally the TCP listener.
+listener.  Rooms start first, then the world, then one NPC actor per
+`[[npcs]]` entry in the map (each joining its room), and finally the
+TCP listener.
 
 ```mermaid
 sequenceDiagram
@@ -62,21 +63,21 @@ sequenceDiagram
   participant G as Glisten listener
 
   Main->>ML: parse_rooms(read("maps/map.toml"))
-  ML-->>Main: Map(rooms, entrance)
+  ML-->>Main: Map(rooms, entrance, npcs)
   Main->>Main: world_name = new_name("world")
   Main->>G: server_child_with_listener(world, entrance, 3000)
   G-->>Main: child spec + Listener(name)
-  Main->>Sup: add rooms, world, NPC, and listener children
+  Main->>Sup: add rooms, world, one child per NPC, and listener children
   Main->>Sup: static_supervisor.start()
   Sup->>R: start one named actor per room
   R-->>Sup: room pid + subject
   Sup->>W: start actor named "world"
   W-->>Sup: world pid + subject
-  Sup->>N: start actor named "goblin"
+  Sup->>N: start one actor per NPC, named from its id
   Sup->>N: send npc.Enter
   Sup->>N: send npc.Tick
-  N->>R: process.named(entrance), monitor room
-  N->>R: room.enter(entrance, occupant(goblin, Npc))
+  N->>R: process.named(corridor), monitor room
+  N->>R: room.enter(corridor, occupant(goblin, Npc))
   Note over R: occupants[goblin_pid] = goblin
   Sup->>G: start listening on port 3000
   Note over G: ready to accept TCP connections

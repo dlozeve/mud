@@ -5,11 +5,12 @@ import gleam/list
 import gleam/result
 import gleam/string
 import mud/direction.{type Direction}
+import mud/npc
 import mud/room
 import tom
 
 pub type Map {
-  Map(rooms: List(room.Def), entrance: room.Def)
+  Map(rooms: List(room.Def), entrance: room.Def, npcs: List(npc.Def))
 }
 
 pub type ParseError {
@@ -17,6 +18,7 @@ pub type ParseError {
   DecoderError(List(decode.DecodeError))
   InvalidExits(List(#(room.Id, Direction)))
   InvalidEntrance(String)
+  InvalidNpcRoom(npc_id: String, room: String)
 }
 
 pub fn parse_rooms(input: String) -> Result(Map, ParseError) {
@@ -39,10 +41,19 @@ pub fn parse_rooms(input: String) -> Result(Map, ParseError) {
         Error(e), Error(_) -> Error(e)
       }
     })
-  case rooms, dict.get(rooms_dict, room.new_id(map_src.entrance)) {
-    Ok(rooms), Ok(entrance) -> Ok(Map(rooms:, entrance:))
-    Error(e), _ -> Error(e)
-    _, Error(_) -> Error(InvalidEntrance(map_src.entrance))
+  let npcs =
+    list.try_map(map_src.npcs, fn(npc_src) {
+      case dict.get(rooms_dict, room.new_id(npc_src.room)) {
+        Ok(room) -> Ok(npc.Def(id: npc_src.id, name: npc_src.name, room:))
+        Error(_) ->
+          Error(InvalidNpcRoom(npc_id: npc_src.id, room: npc_src.room))
+      }
+    })
+  case rooms, npcs, dict.get(rooms_dict, room.new_id(map_src.entrance)) {
+    Ok(rooms), Ok(npcs), Ok(entrance) -> Ok(Map(rooms:, entrance:, npcs:))
+    Error(e), _, _ -> Error(e)
+    _, Error(e), _ -> Error(e)
+    _, _, Error(_) -> Error(InvalidEntrance(map_src.entrance))
   }
 }
 
@@ -55,8 +66,12 @@ type RoomSrc {
   )
 }
 
+type NpcSrc {
+  NpcSrc(id: String, name: String, room: String)
+}
+
 type MapSrc {
-  MapSrc(entrance: String, rooms: List(RoomSrc))
+  MapSrc(entrance: String, rooms: List(RoomSrc), npcs: List(NpcSrc))
 }
 
 fn direction_decoder() -> decode.Decoder(Direction) {
@@ -83,10 +98,18 @@ fn room_src_decoder() -> decode.Decoder(RoomSrc) {
   decode.success(RoomSrc(id:, name:, description:, exits:))
 }
 
+fn npc_src_decoder() -> decode.Decoder(NpcSrc) {
+  use id <- decode.field("id", decode.string)
+  use name <- decode.field("name", decode.string)
+  use room <- decode.field("room", decode.string)
+  decode.success(NpcSrc(id:, name:, room:))
+}
+
 fn map_src_decoder() -> decode.Decoder(MapSrc) {
   use entrance <- decode.field("entrance", decode.string)
   use rooms <- decode.field("rooms", decode.list(room_src_decoder()))
-  decode.success(MapSrc(entrance:, rooms:))
+  use npcs <- decode.optional_field("npcs", [], decode.list(npc_src_decoder()))
+  decode.success(MapSrc(entrance:, rooms:, npcs:))
 }
 
 fn room_def(room: RoomSrc) -> room.Def {

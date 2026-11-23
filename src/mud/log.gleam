@@ -69,6 +69,11 @@ pub fn room(id: String) -> Field {
   woof.str("room", id)
 }
 
+/// The `npc_id` field: the id from the map file, stable across renames.
+pub fn npc_id(id: String) -> Field {
+  woof.str("npc_id", id)
+}
+
 /// A `*_count` field. Keep the key stable (`occupants_count`,
 /// `players_count`, ...): that is what a dashboard or an alert groups by.
 fn count(key: String, value: Int) -> Field {
@@ -94,12 +99,17 @@ pub fn world_logger(rooms: Int, players: Int) -> woof.Logger {
   ])
 }
 
-/// Logger for an NPC actor, carrying its name and pid.
+/// Logger for an NPC actor, carrying its id, name and pid.
 ///
 /// The `npc` namespace means the message does not repeat the subject: it logs
 /// `died`, not `npc died`.
-pub fn npc_logger(name: String, npc_pid: process.Pid) -> woof.Logger {
-  woof.new("npc") |> woof.set_context([occupant_name(name), pid(npc_pid)])
+pub fn npc_logger(
+  id: String,
+  name: String,
+  npc_pid: process.Pid,
+) -> woof.Logger {
+  woof.new("npc")
+  |> woof.set_context([npc_id(id), occupant_name(name), pid(npc_pid)])
 }
 
 /// Logger for one connection, carrying its session status and any further

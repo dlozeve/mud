@@ -13,10 +13,11 @@ pub fn main() -> Nil {
 
   let map_path = "./maps/map.toml"
   let assert Ok(input) = simplifile.read(map_path)
-  let assert Ok(map_loader.Map(rooms:, entrance:)) =
+  let assert Ok(map_loader.Map(rooms:, entrance:, npcs:)) =
     map_loader.parse_rooms(input)
   woof.info("map loaded", [
     woof.int("room_count", list.length(rooms)),
+    woof.int("npc_count", list.length(npcs)),
     woof.str("map_path", map_path),
   ])
   let world_name = process.new_name("world")
@@ -26,7 +27,7 @@ pub fn main() -> Nil {
   let supervisor =
     tree.rooms_supervisor(rooms)
     |> static_supervisor.add(tree.world_child(world_name, rooms))
-    |> static_supervisor.add(tree.npc_child("goblin", "a goblin", entrance))
+    |> tree.add_npc_children(npcs)
     |> static_supervisor.add(server_child)
     |> static_supervisor.start
 

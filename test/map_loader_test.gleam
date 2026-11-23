@@ -24,9 +24,11 @@ description = \"Long and narrow, with a few torches on the walls. Damp.\"
 south = \"entrance\"
 "
 
-  let assert Ok(map_loader.Map(rooms:, entrance:)) =
+  let assert Ok(map_loader.Map(rooms:, entrance:, npcs:)) =
     map_loader.parse_rooms(input)
   assert list.length(rooms) == 2
+  // The npcs table is optional.
+  assert npcs == []
 
   assert Ok(entrance)
     == list.find(rooms, fn(r) { r.id == room.new_id("entrance") })
@@ -42,6 +44,85 @@ south = \"entrance\"
   assert corridor.description
     == "Long and narrow, with a few torches on the walls. Damp."
   assert corridor.exits == dict.from_list([#(direction.South, entrance.id)])
+}
+
+pub fn parse_rooms_npcs_test() {
+  let input =
+    "entrance = \"entrance\"
+
+[[rooms]]
+id = \"entrance\"
+name = \"the dungeon entrance\"
+description = \"Dark.\"
+[rooms.exits]
+down = \"corridor\"
+
+
+[[rooms]]
+id = \"corridor\"
+name = \"a dimly-lit corridor\"
+description = \"Damp.\"
+[rooms.exits]
+up = \"entrance\"
+
+
+[[npcs]]
+id = \"goblin\"
+name = \"a goblin\"
+room = \"corridor\"
+
+
+[[npcs]]
+id = \"bat\"
+name = \"a bat\"
+room = \"entrance\"
+"
+
+  let assert Ok(map_loader.Map(rooms:, npcs:, ..)) =
+    map_loader.parse_rooms(input)
+  let assert Ok(corridor) =
+    list.find(rooms, fn(r) { r.id == room.new_id("corridor") })
+  let assert Ok(entrance) =
+    list.find(rooms, fn(r) { r.id == room.new_id("entrance") })
+
+  let assert Ok(goblin) = list.find(npcs, fn(n) { n.id == "goblin" })
+  assert goblin.name == "a goblin"
+  // The room string is resolved to the loaded room definition.
+  assert goblin.room == corridor
+
+  let assert Ok(bat) = list.find(npcs, fn(n) { n.id == "bat" })
+  assert bat.name == "a bat"
+  assert bat.room == entrance
+}
+
+pub fn parse_rooms_npc_unknown_room_test() {
+  let input =
+    "entrance = \"entrance\"
+
+[[rooms]]
+id = \"entrance\"
+name = \"the dungeon entrance\"
+description = \"Dark.\"
+[rooms.exits]
+down = \"corridor\"
+
+
+[[rooms]]
+id = \"corridor\"
+name = \"a dimly-lit corridor\"
+description = \"Damp.\"
+[rooms.exits]
+up = \"entrance\"
+
+
+[[npcs]]
+id = \"goblin\"
+name = \"a goblin\"
+room = \"cellar\"
+"
+
+  let assert Error(error) = map_loader.parse_rooms(input)
+  assert error == map_loader.InvalidNpcRoom(npc_id: "goblin", room: "cellar")
 }
 
 pub fn parse_rooms_no_entrance_test() {
