@@ -42,6 +42,33 @@ state machine and runs the effects defined in `session`.
 `runner.run_effects` turns those effects into sends to the world, the
 current room, the socket, or a timer.
 
+## Map file
+
+The world is sepcified in a TOML file, read at startup.
+
+```toml
+entrance = "entrance"          # room id where players spawn
+
+[[rooms]]
+id = "entrance"
+name = "the dungeon entrance"
+description = "The bottom of an enormous stone staircase."
+[rooms.exits]
+down = "corridor"              # direction = destination room id
+
+[[rooms]]
+id = "corridor"
+name = "a dimly-lit corridor"
+description = "Long and narrow, with a few torches on the walls."
+[rooms.exits]
+up = "entrance"
+
+[[npcs]]                       # optional, the table may be omitted
+id = "goblin"                  # names the process, tags its logs
+name = "a goblin"              # what players see and `attack` matches
+room = "corridor"              # id of the room it starts in
+```
+
 ## Sequence diagrams
 
 ### Startup
