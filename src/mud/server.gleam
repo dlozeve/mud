@@ -30,7 +30,7 @@ pub fn server_child_with_listener(
     glisten.new(on_init(world, entrance), loop)
     |> glisten.with_active_state(options.Once)
     |> glisten.with_pool_size(10)
-    |> glisten.bind("0.0.0.0")
+    |> glisten.bind("::")
     |> glisten.with_close(on_close)
     |> glisten.with_listener_name(listener_name)
     |> glisten.supervised(port)
