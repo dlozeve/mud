@@ -214,7 +214,9 @@ fn you_are_in(def: room.Def) -> String {
   player.render(event.YouAreIn(
     room_name: def.name,
     room_description: def.description,
-    exits: list.filter(direction.all(), fn(d) { dict.has_key(def.exits, d) }),
+    exits: list.filter(direction.all(), fn(each_direction) {
+      dict.has_key(def.exits, each_direction)
+    }),
   ))
 }
 
@@ -258,7 +260,7 @@ fn expect_no_output(client: Client) -> Nil {
 
 // ----- T1: two clients ------------------------------------------------
 
-pub fn two_clients_move_and_say_test() {
+pub fn two_clients_move_and_say_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
   let bob = start_client(world, 2)
@@ -310,7 +312,7 @@ pub fn two_clients_move_and_say_test() {
 
 // ----- T1b: combat -----------------------------------------------------
 
-pub fn attacking_a_missing_npc_reports_no_target_test() {
+pub fn attacking_a_missing_npc_reports_no_target_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
 
@@ -326,7 +328,7 @@ pub fn attacking_a_missing_npc_reports_no_target_test() {
   stop_world(world)
 }
 
-pub fn lethal_npc_attack_kills_the_player_and_tells_the_room_test() {
+pub fn lethal_npc_attack_kills_the_player_and_tells_the_room_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
   let bob = start_client(world, 2)
@@ -343,13 +345,14 @@ pub fn lethal_npc_attack_kills_the_player_and_tells_the_room_test() {
 
   // Drive the room directly: the attack is deterministic, unlike a real NPC's
   // hit roll. A damage value at least as large as the player's hp is lethal.
-  room.npc_attack(
-    world.entrance.process_name,
-    process.self(),
-    alice.pid,
-    "a goblin",
-    100,
-  )
+  let _ =
+    room.npc_attack(
+      world.entrance.process_name,
+      process.self(),
+      alice.pid,
+      "a goblin",
+      100,
+    )
 
   expect_output(alice, "You died")
   expect_stopped(alice)
@@ -363,7 +366,7 @@ pub fn lethal_npc_attack_kills_the_player_and_tells_the_room_test() {
 
 // ----- T2: restarts ----------------------------------------------------
 
-pub fn room_restart_reenters_test() {
+pub fn room_restart_reenters_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
   let bob = start_client(world, 2)
@@ -420,7 +423,7 @@ pub fn room_restart_reenters_test() {
   stop_world(world)
 }
 
-pub fn world_down_reports_and_session_drops_cleanly_test() {
+pub fn world_down_reports_and_session_drops_cleanly_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
   let bob = start_client(world, 2)
@@ -459,8 +462,6 @@ pub fn world_down_reports_and_session_drops_cleanly_test() {
 
 // ----- T3: eviction ----------------------------------------------------
 
-const name_in_use = "This name is already in use. Choose another name: "
-
 // The room and the world both discover a dead player through monitors, but
 // their DOWN messages are independent. The room can broadcast the departure
 // before the world has freed the name, so retry the join for a short while.
@@ -475,7 +476,8 @@ fn join_with_retry_attempt(
   attempts: Int,
 ) -> Nil {
   let joined = you_are_in(room) <> "\n"
-  let in_use = name_in_use <> "\n"
+  let in_use =
+    "The name " <> name <> " is already in use. Choose another name: " <> "\n"
   send_line(client, name)
   case process.receive(client.events, 2000) {
     Ok(Output(_, actual)) if actual == joined -> Nil
@@ -492,7 +494,7 @@ fn join_with_retry_attempt(
   }
 }
 
-pub fn killed_session_is_evicted_and_name_freed_test() {
+pub fn killed_session_is_evicted_and_name_freed_test() -> Nil {
   let world = start_world()
   let alice = start_client(world, 1)
   let bob = start_client(world, 2)
@@ -608,7 +610,7 @@ fn close_reader(reader: Reader) -> Nil {
   Nil
 }
 
-pub fn socket_end_to_end_test() {
+pub fn socket_end_to_end_test() -> Nil {
   let #(world, port) = start_world_with_server()
   let alice = connect(port)
   let bob = connect(port)

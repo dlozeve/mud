@@ -22,7 +22,7 @@ pub type State {
 
 pub type Message {
   Join(name: String, pid: process.Pid, at: room.Id, reply_to: Subject(Reply))
-  Move(from: room.Id, dir: Direction, reply_to: Subject(Reply))
+  Move(from: room.Id, direction: Direction, reply_to: Subject(Reply))
   Down(pid: Option(process.Pid))
 }
 
@@ -32,13 +32,13 @@ pub type Reply {
 }
 
 pub type JoinError {
-  NoSuchRoom
-  AlreadyLoggedIn
+  NoSuchRoom(room: room.Id)
+  AlreadyLoggedIn(name: String)
 }
 
 pub type MoveError {
-  NonExistingRoom
-  NonExistingExit
+  NonExistingRoom(room: room.Id)
+  NonExistingExit(from: room.Id, direction: Direction)
 }
 
 // ----- Action -----------------------------------------------------------
@@ -59,51 +59,58 @@ pub fn decide(
     Join(name, pid, at, reply_to) -> {
       // Names are compared case-insensitively, so "Alice" and "alice" are the
       // same player as far as the game is concerned.
-      let name = string.lowercase(name)
-      case dict.get(state.rooms, at), dict.get(state.players, name) {
+      let normalised_name = string.lowercase(name)
+      case dict.get(state.rooms, at), dict.get(state.players, normalised_name) {
         Error(_), _ -> {
           let logs = [
             log.Line(woof.Warning, "player could not join: no such room", [
-              log.occupant_name(name),
+              log.occupant_name(normalised_name),
               log.occupant_pid(pid),
               log.room(room.id_to_string(at)),
             ]),
           ]
-          #(state, [JoinReply(reply_to, Joined(Error(NoSuchRoom)))], logs)
+          #(state, [JoinReply(reply_to, Joined(Error(NoSuchRoom(at))))], logs)
         }
         Ok(_), Ok(_) -> {
           let logs = [
             log.Line(woof.Warning, "player could not join: already logged in", [
-              log.occupant_name(name),
+              log.occupant_name(normalised_name),
               log.occupant_pid(pid),
               log.room(room.id_to_string(at)),
             ]),
           ]
-          #(state, [JoinReply(reply_to, Joined(Error(AlreadyLoggedIn)))], logs)
+          #(
+            state,
+            [JoinReply(reply_to, Joined(Error(AlreadyLoggedIn(name))))],
+            logs,
+          )
         }
         Ok(room), Error(_) -> {
           let logs = [
             log.Line(woof.Debug, "player joining", [
-              log.occupant_name(name),
+              log.occupant_name(normalised_name),
               log.occupant_pid(pid),
               log.room(room.id_to_string(room.id)),
             ]),
           ]
           #(
-            State(..state, players: dict.insert(state.players, name, pid)),
+            State(
+              ..state,
+              players: dict.insert(state.players, normalised_name, pid),
+            ),
             [JoinReply(reply_to, Joined(Ok(room))), Monitor(pid)],
             logs,
           )
         }
       }
     }
-    Move(from, dir, reply_to) ->
-      case resolve_direction(state.rooms, from, dir) {
+    Move(from, direction, reply_to) ->
+      case resolve_direction(state.rooms, from, direction) {
         Ok(to_room) -> {
           let logs = [
             log.Line(woof.Debug, "player moving", [
               woof.str("from_room", room.id_to_string(from)),
-              woof.str("direction", direction.render(dir)),
+              woof.str("direction", direction.render(direction)),
               woof.str("to_room", room.id_to_string(to_room.id)),
             ]),
           ]
@@ -117,7 +124,7 @@ pub fn decide(
           let logs = [
             log.Line(woof.Warning, "player could not move", [
               woof.str("from_room", room.id_to_string(from)),
-              woof.str("direction", direction.render(dir)),
+              woof.str("direction", direction.render(direction)),
               woof.str("error", string.inspect(error)),
             ]),
           ]
@@ -142,19 +149,19 @@ pub fn decide(
 fn resolve_direction(
   rooms: Dict(room.Id, room.Def),
   at: room.Id,
-  dir: Direction,
+  direction: Direction,
 ) -> Result(room.Def, MoveError) {
   case dict.get(rooms, at) {
     Ok(from_room) ->
-      case dict.get(from_room.exits, dir) {
+      case dict.get(from_room.exits, direction) {
         Ok(to) ->
           case dict.get(rooms, to) {
             Ok(to_room) -> Ok(to_room)
-            Error(_) -> Error(NonExistingRoom)
+            Error(_) -> Error(NonExistingRoom(to))
           }
-        Error(_) -> Error(NonExistingExit)
+        Error(_) -> Error(NonExistingExit(from: at, direction: direction))
       }
-    Error(_) -> Error(NonExistingRoom)
+    Error(_) -> Error(NonExistingRoom(at))
   }
 }
 
@@ -191,26 +198,30 @@ pub fn join(
   pid: process.Pid,
   at: room.Id,
   reply_to: Subject(Reply),
-) -> Nil {
+) -> Result(Nil, Nil) {
   case process.named(world) {
     Ok(_pid) ->
       actor.send(
         process.named_subject(world),
         Join(name:, pid:, at:, reply_to:),
       )
-    Error(_) -> Nil
+      |> Ok
+    Error(_) -> Error(Nil)
   }
 }
 
 pub fn move(
   world: process.Name(Message),
   from: room.Id,
-  dir: Direction,
+  direction: Direction,
   reply_to: Subject(Reply),
 ) -> Result(Nil, Nil) {
   case process.named(world) {
     Ok(_pid) ->
-      actor.send(process.named_subject(world), Move(from:, dir:, reply_to:))
+      actor.send(
+        process.named_subject(world),
+        Move(from:, direction:, reply_to:),
+      )
       |> Ok
     Error(_) -> Error(Nil)
   }

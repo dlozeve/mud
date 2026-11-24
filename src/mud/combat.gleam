@@ -21,15 +21,35 @@ pub const player_damage = 2
 
 pub const npc_damage = 1
 
+/// The outcome of a hit roll.
+pub type AttackOutcome {
+  Hit
+  Miss
+}
+
 /// A roll is an integer in the range 0-99.
 pub fn roll() -> Int {
   int.random(100)
 }
 
-pub fn player_hits(roll: Int) -> Bool {
-  roll < player_hit_chance
+pub fn player_hits(roll: Int) -> AttackOutcome {
+  case roll < player_hit_chance {
+    True -> Hit
+    False -> Miss
+  }
 }
 
-pub fn npc_hits(roll: Int) -> Bool {
-  roll < npc_hit_chance
+pub fn npc_hits(roll: Int) -> AttackOutcome {
+  case roll < npc_hit_chance {
+    True -> Hit
+    False -> Miss
+  }
+}
+
+/// Render an outcome for a log field.
+pub fn outcome_to_string(outcome: AttackOutcome) -> String {
+  case outcome {
+    Hit -> "hit"
+    Miss -> "miss"
+  }
 }

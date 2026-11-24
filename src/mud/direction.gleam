@@ -7,8 +7,8 @@ pub type Direction {
   Down
 }
 
-pub fn render(dir: Direction) -> String {
-  case dir {
+pub fn render(direction: Direction) -> String {
+  case direction {
     North -> "North"
     East -> "East"
     South -> "South"

@@ -26,7 +26,6 @@ fn state_with(status: session.Status) -> session.State {
     entrance: room.new_id("entrance"),
     status: status,
     buffer: <<>>,
-    room_watch: None,
   )
 }
 
@@ -59,7 +58,7 @@ fn is_ok(result: Result(a, b)) -> Bool {
 
 // ----- Ordering ---------------------------------------------------------
 
-pub fn effects_run_in_order_test() {
+pub fn effects_run_in_order_test() -> Nil {
   let state = state_with(session.AwaitingName)
   let sent = process.new_subject()
   let scheduled = process.new_subject()
@@ -82,7 +81,7 @@ pub fn effects_run_in_order_test() {
   assert process.receive(scheduled, 100) == Error(Nil)
 }
 
-pub fn stop_halts_later_effects_test() {
+pub fn stop_halts_later_effects_test() -> Nil {
   let state = state_with(session.AwaitingName)
   let sent = process.new_subject()
   let scheduled = process.new_subject()
@@ -107,7 +106,7 @@ pub fn stop_halts_later_effects_test() {
   assert process.receive(sent, 100) == Error(Nil)
 }
 
-pub fn failed_send_halts_later_effects_test() {
+pub fn failed_send_halts_later_effects_test() -> Nil {
   let state = state_with(session.AwaitingName)
   let attempts = process.new_subject()
   let scheduled = process.new_subject()
@@ -132,7 +131,7 @@ pub fn failed_send_halts_later_effects_test() {
 
 // ----- Scheduling -------------------------------------------------------
 
-pub fn join_schedules_a_timeout_test() {
+pub fn join_schedules_a_timeout_test() -> Nil {
   let state = state_with(session.Joining("Alice"))
   let sent = process.new_subject()
   let scheduled = process.new_subject()
@@ -157,9 +156,10 @@ pub fn join_schedules_a_timeout_test() {
 
 // ----- Combat -----------------------------------------------------------
 
-pub fn announce_death_continues_to_later_effects_test() {
+pub fn announce_death_continues_to_later_effects_test() -> Nil {
   let target_room = room_def("room")
-  let state = state_with(session.InGame(player_in(target_room)))
+  let state =
+    state_with(session.InGame(player_in(target_room), room_watch: None))
   let sent = process.new_subject()
   let scheduled = process.new_subject()
 
@@ -178,9 +178,10 @@ pub fn announce_death_continues_to_later_effects_test() {
   assert process.receive(sent, 100) == Ok("after\n")
 }
 
-pub fn attack_continues_to_later_effects_test() {
+pub fn attack_continues_to_later_effects_test() -> Nil {
   let target_room = room_def("room")
-  let state = state_with(session.InGame(player_in(target_room)))
+  let state =
+    state_with(session.InGame(player_in(target_room), room_watch: None))
   let sent = process.new_subject()
   let scheduled = process.new_subject()
 
@@ -199,9 +200,10 @@ pub fn attack_continues_to_later_effects_test() {
   assert process.receive(sent, 100) == Ok("after\n")
 }
 
-pub fn unavailable_room_schedules_retry_test() {
+pub fn unavailable_room_schedules_retry_test() -> Nil {
   let target_room = room_def("unavailable")
-  let state = state_with(session.InGame(player_in(target_room)))
+  let state =
+    state_with(session.InGame(player_in(target_room), room_watch: None))
   let sent = process.new_subject()
   let scheduled = process.new_subject()
 

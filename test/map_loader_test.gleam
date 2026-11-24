@@ -5,7 +5,7 @@ import mud/direction
 import mud/map_loader
 import mud/room
 
-pub fn parse_rooms_test() {
+pub fn parse_rooms_test() -> Nil {
   let input =
     "entrance = \"entrance\"
 
@@ -32,9 +32,13 @@ south = \"entrance\"
   assert npcs == []
 
   assert Ok(entrance)
-    == list.find(rooms, fn(r) { r.id == room.new_id("entrance") })
+    == list.find(rooms, fn(room_definition) {
+      room_definition.id == room.new_id("entrance")
+    })
   let assert Ok(corridor) =
-    list.find(rooms, fn(r) { r.id == room.new_id("corridor") })
+    list.find(rooms, fn(room_definition) {
+      room_definition.id == room.new_id("corridor")
+    })
 
   assert entrance.name == "the dungeon entrance"
   assert entrance.description
@@ -47,7 +51,7 @@ south = \"entrance\"
   assert corridor.exits == dict.from_list([#(direction.South, entrance.id)])
 }
 
-pub fn parse_rooms_npcs_test() {
+pub fn parse_rooms_npcs_test() -> Nil {
   let input =
     "entrance = \"entrance\"
 
@@ -83,24 +87,30 @@ room = \"entrance\"
   let assert Ok(map_loader.Map(rooms:, npcs:, ..)) =
     map_loader.parse_rooms(input)
   let assert Ok(corridor) =
-    list.find(rooms, fn(r) { r.id == room.new_id("corridor") })
+    list.find(rooms, fn(room_definition) {
+      room_definition.id == room.new_id("corridor")
+    })
   let assert Ok(entrance) =
-    list.find(rooms, fn(r) { r.id == room.new_id("entrance") })
+    list.find(rooms, fn(room_definition) {
+      room_definition.id == room.new_id("entrance")
+    })
 
-  let assert Ok(goblin) = list.find(npcs, fn(n) { n.id == "goblin" })
+  let assert Ok(goblin) =
+    list.find(npcs, fn(npc_definition) { npc_definition.id == "goblin" })
   assert goblin.name == "a goblin"
   assert goblin.hp == 3
   // The room string is resolved to the loaded room definition.
   assert goblin.room == corridor
 
-  let assert Ok(bat) = list.find(npcs, fn(n) { n.id == "bat" })
+  let assert Ok(bat) =
+    list.find(npcs, fn(npc_definition) { npc_definition.id == "bat" })
   assert bat.name == "a bat"
   // An omitted hp falls back to the combat default.
   assert bat.hp == combat.npc_default_hp
   assert bat.room == entrance
 }
 
-pub fn parse_rooms_npc_unknown_room_test() {
+pub fn parse_rooms_npc_unknown_room_test() -> Nil {
   let input =
     "entrance = \"entrance\"
 
@@ -130,7 +140,7 @@ room = \"cellar\"
   assert error == map_loader.InvalidNpcRoom(npc_id: "goblin", room: "cellar")
 }
 
-pub fn parse_rooms_no_entrance_test() {
+pub fn parse_rooms_no_entrance_test() -> Nil {
   let input =
     "[[rooms]]
 id = \"entrance\"
@@ -140,9 +150,10 @@ description = \"The bottom of an enormous stone staircase. Dark and ominous. Slo
 
 "
   let assert Error(map_loader.DecoderError(_)) = map_loader.parse_rooms(input)
+  Nil
 }
 
-pub fn parse_rooms_invalid_entrance_test() {
+pub fn parse_rooms_invalid_entrance_test() -> Nil {
   let input =
     "entrance = \"somewhere\"
 
@@ -165,7 +176,7 @@ south = \"entrance\"
   assert e == map_loader.InvalidEntrance("somewhere")
 }
 
-pub fn parse_rooms_no_exits_test() {
+pub fn parse_rooms_no_exits_test() -> Nil {
   let input =
     "entrance = \"entrance\"
 
@@ -177,9 +188,10 @@ description = \"The bottom of an enormous stone staircase. Dark and ominous. Slo
 north = \"corridor\"
 "
   let assert Error(_) = map_loader.parse_rooms(input)
+  Nil
 }
 
-pub fn parse_rooms_no_exits_key_test() {
+pub fn parse_rooms_no_exits_key_test() -> Nil {
   let input =
     "entrance = \"entrance\"
 
@@ -189,9 +201,10 @@ name = \"the dungeon entrance\"
 description = \"The bottom of an enormous stone staircase. Dark and ominous. Slow rumble coming from below.\"
 "
   let assert Error(_) = map_loader.parse_rooms(input)
+  Nil
 }
 
-pub fn parse_rooms_invalid_exits_nonexisting_room_test() {
+pub fn parse_rooms_invalid_exits_nonexisting_room_test() -> Nil {
   let input =
     "entrance = \"entrance\"
 
@@ -216,7 +229,7 @@ south = \"entrance\""
     == map_loader.InvalidExits([#(room.new_id("entrance"), direction.West)])
 }
 
-pub fn parse_rooms_invalid_exits_no_corresponding_exit_test() {
+pub fn parse_rooms_invalid_exits_no_corresponding_exit_test() -> Nil {
   let input =
     "entrance = \"entrance\"
 

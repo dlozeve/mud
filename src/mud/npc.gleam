@@ -71,15 +71,15 @@ pub fn decide(
           log.Line(woof.Debug, "ticked", [woof.int("hp", hp)]),
         ])
         Attacking(hp, target) -> {
-          let hit = combat.npc_hits(roll)
-          let attack = case hit {
-            True -> [AttackPlayer(target, combat.npc_damage)]
-            False -> []
+          let attack_outcome = combat.npc_hits(roll)
+          let attack = case attack_outcome {
+            combat.Hit -> [AttackPlayer(target, combat.npc_damage)]
+            combat.Miss -> []
           }
           #(state, list.append(attack, [ScheduleTick(state.tick_ms)]), [
             log.Line(woof.Debug, "ticked", [
               woof.int("hp", hp),
-              woof.bool("hit", hit),
+              woof.str("outcome", combat.outcome_to_string(attack_outcome)),
             ]),
           ])
         }
@@ -118,10 +118,19 @@ fn decide_room_event(
   state: State,
   room_event: event.RoomEvent,
 ) -> #(State, List(Action), List(log.Line)) {
-  case state.status, room_event {
+  case state.status {
     // A dead NPC has nothing left to react to.
-    Dead, _ -> #(state, [], [])
-    _, event.NpcAttacked(attacker_name, attacker_pid, damage) -> {
+    Dead -> #(state, [], [])
+    Alive(_) | Attacking(..) -> decide_live_room_event(state, room_event)
+  }
+}
+
+fn decide_live_room_event(
+  state: State,
+  room_event: event.RoomEvent,
+) -> #(State, List(Action), List(log.Line)) {
+  case room_event {
+    event.NpcAttacked(attacker_name, attacker_pid, damage) -> {
       let hp = case state.status {
         Alive(hp) | Attacking(hp, _) -> hp
         Dead -> 0
@@ -150,12 +159,25 @@ fn decide_room_event(
       }
     }
     // The target left the room or died: go back to idling.
-    Attacking(hp, _), event.NpcTargetGone -> #(
-      State(..state, status: Alive(hp)),
-      [],
-      [log.Line(woof.Debug, "attack target gone", [])],
-    )
-    _, _ -> #(state, [], [])
+    event.NpcTargetGone ->
+      case state.status {
+        Attacking(hp, _) -> #(State(..state, status: Alive(hp)), [], [
+          log.Line(woof.Debug, "attack target gone", []),
+        ])
+        Alive(_) | Dead -> #(state, [], [])
+      }
+    // Everything else is not addressed to an NPC.
+    event.YouAreIn(..)
+    | event.OccupantArrived(..)
+    | event.OccupantLeft(..)
+    | event.OccupantDied(..)
+    | event.YouSaid(..)
+    | event.OccupantSaid(..)
+    | event.OccupantList(..)
+    | event.AttackFailed(..)
+    | event.YouHitNpc(..)
+    | event.YouMissedNpc(..)
+    | event.NpcHitYou(..) -> #(state, [], [])
   }
 }
 
@@ -177,15 +199,21 @@ fn run(action: Action, state: State) -> Nil {
   case action {
     ScheduleTick(tick_ms:) -> schedule_tick(state.subject, tick_ms)
     JoinRoom(attempt:) -> join(state, attempt)
-    AttackPlayer(target, damage) ->
-      room.npc_attack(
-        state.room.process_name,
-        state.pid,
-        target.pid,
-        state.name,
-        damage,
-      )
-    Die -> room.died(state.room.process_name, state.pid)
+    AttackPlayer(target, damage) -> {
+      let _ =
+        room.npc_attack(
+          state.room.process_name,
+          state.pid,
+          target.pid,
+          state.name,
+          damage,
+        )
+      Nil
+    }
+    Die -> {
+      let _ = room.died(state.room.process_name, state.pid)
+      Nil
+    }
   }
 }
 
@@ -195,7 +223,8 @@ fn join(state: State, attempt: Int) -> Nil {
   case process.named(state.room.process_name) {
     Ok(room_pid) -> {
       let _ = process.monitor(room_pid)
-      room.enter(state.room.process_name, to_occupant(state, state.pid))
+      let _ = room.enter(state.room.process_name, to_occupant(state, state.pid))
+      Nil
     }
     Error(_) -> {
       // The room is not up yet: retry shortly, which also logs the attempt.

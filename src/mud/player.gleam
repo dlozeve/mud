@@ -12,11 +12,16 @@ import mud/room
 // ----- State ------------------------------------------------------------
 
 pub type State {
-  State(pid: process.Pid, name: String, room: room.Def, hp: Int)
+  State(pid: process.Pid, name: String, room: room.Def, health: Health)
+}
+
+pub type Health {
+  Alive(hp: Int)
+  Dead
 }
 
 pub fn new(pid: process.Pid, name: String, room: room.Def) -> State {
-  State(pid:, name:, room:, hp: combat.player_max_hp)
+  State(pid:, name:, room:, health: Alive(combat.player_max_hp))
 }
 
 // ----- Action -----------------------------------------------------------
@@ -41,12 +46,14 @@ pub fn decide_command(
   case command {
     command.Help -> #(state, [Output(help())])
     command.Say(line) -> #(state, [Say(line)])
-    command.Go(dir) -> #(state, [Move(dir)])
+    command.Go(direction) -> #(state, [Move(direction)])
     command.Look -> #(state, [Look])
     command.WhoIsHere -> #(state, [WhoIsHere])
     command.Attack(name) -> #(state, [Attack(name)])
     command.Quit -> #(state, [])
-    command.BadDirection(dir) -> #(state, [Output("Unknown direction: " <> dir)])
+    command.BadDirection(text) -> #(state, [
+      Output("Unknown direction: " <> text),
+    ])
     command.MissingDirection -> #(state, [Output("Go where?")])
     command.MissingTarget -> #(state, [Output("Attack what?")])
     command.Unknown(line) -> #(state, [Output("Unknown command: " <> line)])
@@ -60,7 +67,17 @@ pub fn decide(state: State, room_event: RoomEvent) -> #(State, List(Action)) {
     event.NpcHitYou(name, damage) -> take_damage(state, name, damage)
     // Combat events addressed to an NPC; a player never receives these.
     event.NpcAttacked(..) | event.NpcTargetGone -> #(state, [])
-    _ -> #(state, [Output(render(room_event))])
+    // Every other event is rendered as text for the player.
+    event.YouAreIn(..)
+    | event.OccupantArrived(..)
+    | event.OccupantLeft(..)
+    | event.OccupantDied(..)
+    | event.YouSaid(..)
+    | event.OccupantSaid(..)
+    | event.OccupantList(..)
+    | event.AttackFailed(..)
+    | event.YouHitNpc(..)
+    | event.YouMissedNpc(..) -> #(state, [Output(render(room_event))])
   }
 }
 
@@ -69,13 +86,18 @@ fn take_damage(
   name: String,
   damage: Int,
 ) -> #(State, List(Action)) {
-  let hp = int.max(state.hp - damage, 0)
-  case hp {
-    0 -> #(State(..state, hp: 0), [Output("You died"), Die])
-    _ -> #(State(..state, hp:), [
-      Output(render(event.NpcHitYou(name, damage))),
-      Output(hp_line(hp)),
-    ])
+  case state.health {
+    Dead -> #(state, [])
+    Alive(hp) -> {
+      let hp = int.max(hp - damage, 0)
+      case hp {
+        0 -> #(State(..state, health: Dead), [Output("You died"), Die])
+        _ -> #(State(..state, health: Alive(hp)), [
+          Output(render(event.NpcHitYou(name, damage))),
+          Output(hp_line(hp)),
+        ])
+      }
+    }
   }
 }
 
@@ -128,10 +150,11 @@ pub fn render(room_event: event.RoomEvent) -> String {
 fn describe_exits(exits: List(Direction)) -> String {
   // Up and Down are not doorways, they are staircases.
   let #(staircases, doorways) =
-    list.partition(exits, fn(dir) {
-      case dir {
+    list.partition(exits, fn(exit_direction) {
+      case exit_direction {
         direction.Up | direction.Down -> True
-        _ -> False
+        direction.North | direction.East | direction.South | direction.West ->
+          False
       }
     })
   case describe_doorways(doorways), describe_staircases(staircases) {
@@ -148,10 +171,10 @@ fn describe_doorways(exits: List(Direction)) -> String {
     [a] -> "There is a single door, " <> a <> "."
     [a, b] -> "There are two doors: " <> a <> " and " <> b <> "."
     words -> {
-      let n = list.length(words)
-      let #(front, tail) = list.split(words, n - 1)
+      let count = list.length(words)
+      let #(front, tail) = list.split(words, count - 1)
       "There are "
-      <> int.to_string(n)
+      <> int.to_string(count)
       <> " doors: "
       <> string.join(front, ", ")
       <> " and "
@@ -167,10 +190,10 @@ fn describe_staircases(exits: List(Direction)) -> String {
     [a] -> "There is a staircase leading " <> a <> "."
     [a, b] -> "There are staircases leading " <> a <> " and " <> b <> "."
     words -> {
-      let n = list.length(words)
-      let #(front, tail) = list.split(words, n - 1)
+      let count = list.length(words)
+      let #(front, tail) = list.split(words, count - 1)
       "There are "
-      <> int.to_string(n)
+      <> int.to_string(count)
       <> " staircases leading "
       <> string.join(front, ", ")
       <> " and "
@@ -188,8 +211,8 @@ fn describe_occupants(
     [] -> ""
     [name] -> name <> " is here."
     names -> {
-      let n = list.length(names)
-      let #(front, tail) = list.split(names, n - 1)
+      let count = list.length(names)
+      let #(front, tail) = list.split(names, count - 1)
       string.join(front, ", ") <> " and " <> string.concat(tail) <> " are here."
     }
   }
@@ -197,8 +220,8 @@ fn describe_occupants(
     [] -> ""
     [name] -> "There is " <> name <> " in the room."
     names -> {
-      let n = list.length(names)
-      let #(front, tail) = list.split(names, n - 1)
+      let count = list.length(names)
+      let #(front, tail) = list.split(names, count - 1)
       "There are "
       <> string.join(front, ", ")
       <> " and "
