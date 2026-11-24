@@ -67,21 +67,14 @@ pub fn decide(
     Tick(roll) ->
       case state.status {
         Dead -> #(state, [], [])
-        Alive(hp) -> #(state, [ScheduleTick(state.tick_ms)], [
-          log.Line(woof.Debug, "ticked", [woof.int("hp", hp)]),
-        ])
-        Attacking(hp, target) -> {
+        Alive(_hp) -> #(state, [ScheduleTick(state.tick_ms)], [])
+        Attacking(_hp, target) -> {
           let attack_outcome = combat.npc_hits(roll)
           let attack = case attack_outcome {
             combat.Hit -> [AttackPlayer(target, combat.npc_damage)]
             combat.Miss -> []
           }
-          #(state, list.append(attack, [ScheduleTick(state.tick_ms)]), [
-            log.Line(woof.Debug, "ticked", [
-              woof.int("hp", hp),
-              woof.str("outcome", combat.outcome_to_string(attack_outcome)),
-            ]),
-          ])
+          #(state, list.append(attack, [ScheduleTick(state.tick_ms)]), [])
         }
       }
     Enter ->

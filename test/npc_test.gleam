@@ -44,13 +44,11 @@ fn joining(attempt: Int) -> log.Line {
 // ----- Ticking ----------------------------------------------------------
 
 pub fn tick_while_alive_schedules_the_next_tick_without_losing_hp_test() -> Nil {
-  // Idle NPCs keep ticking so they are ready to attack when provoked, but
-  // they no longer lose hp on their own.
   let state = npc_state(npc.Alive(3))
   let #(state, actions, logs) = npc.decide(state, npc.Tick(0))
   assert state.status == npc.Alive(3)
   assert actions == [npc.ScheduleTick(1000)]
-  assert logs == [log.Line(woof.Debug, "ticked", [woof.int("hp", 3)])]
+  assert logs == []
 }
 
 pub fn tick_while_attacking_hits_the_target_test() -> Nil {
@@ -62,13 +60,7 @@ pub fn tick_while_attacking_hits_the_target_test() -> Nil {
       npc.AttackPlayer(target(), combat.npc_damage),
       npc.ScheduleTick(1000),
     ]
-  assert logs
-    == [
-      log.Line(woof.Debug, "ticked", [
-        woof.int("hp", 3),
-        woof.str("outcome", "hit"),
-      ]),
-    ]
+  assert logs == []
 }
 
 pub fn tick_while_attacking_misses_the_target_test() -> Nil {
@@ -76,13 +68,7 @@ pub fn tick_while_attacking_misses_the_target_test() -> Nil {
   let #(state, actions, logs) = npc.decide(state, npc.Tick(99))
   assert state.status == npc.Attacking(3, target())
   assert actions == [npc.ScheduleTick(1000)]
-  assert logs
-    == [
-      log.Line(woof.Debug, "ticked", [
-        woof.int("hp", 3),
-        woof.str("outcome", "miss"),
-      ]),
-    ]
+  assert logs == []
 }
 
 pub fn tick_when_dead_is_ignored_test() -> Nil {
